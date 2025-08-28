@@ -58,7 +58,8 @@ load(file = "./Data/player_stats_weekly.Rdata")
 Download the injuries data and load it into an object called `nfl_injuries`:
 
 ```{r}
-
+nfl_injuries <- progressr::with_progress(
+  nflreadr::load_injuries(seasons = TRUE))
 ```
 
 # Characteristics of the Data
