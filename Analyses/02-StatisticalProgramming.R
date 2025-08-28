@@ -17,7 +17,7 @@ library("tidyverse")
 
 ## Load Data ----
 
-# Load the data file `player_stats_weekly.Rdata`:
+# Load the data file that is in the following location: `./Data/player_stats_weekly.Rdata`:
 
 load(file = "./Data/player_stats_weekly.Rdata")
 
