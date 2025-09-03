@@ -1,5 +1,5 @@
 ---
-title: "02-Statistical Programming: Using R for Statistical Analysis"
+title: "05-Statistical Programming in R"
 author: "Insert Your Name Here"
 date: '`r format(Sys.Date(), "%B %d, %Y")`'
 format:
@@ -32,6 +32,9 @@ For course instructions on using Quarto, see here: <https://isaactpetersen.githu
 ```{r}
 #install.packages("remotes")
 #remotes::install_github("DevPsyLab/petersenlab")
+#remotes::install_github("FantasyFootballAnalytics/ffanalytics")
+
+#update.packages(ask = FALSE)
 ```
 
 ## Load Libraries
@@ -58,8 +61,7 @@ Load the data file that is in the following location: `./Data/player_stats_weekl
 Download the injuries data and load it into an object called `nfl_injuries`:
 
 ```{r}
-nfl_injuries <- progressr::with_progress(
-  nflreadr::load_injuries(seasons = TRUE))
+
 ```
 
 # Characteristics of the Data

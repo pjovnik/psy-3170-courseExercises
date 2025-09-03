@@ -2,10 +2,13 @@
 
 ## Install Libraries ----
 
-# Install the petersenlab package:
-
+# Install the petersenlab and ffanalytics packages:
 install.packages("remotes")
 remotes::install_github("DevPsyLab/petersenlab")
+remotes::install_github("FantasyFootballAnalytics/ffanalytics")
+
+# Update package versions
+update.packages(ask = FALSE)
 
 ## Load Libraries ----
 
