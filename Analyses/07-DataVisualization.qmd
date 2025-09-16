@@ -1,0 +1,115 @@
+---
+title: "07-Data Visualization and Interpretation"
+author: "Insert Your Name Here"
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+format:
+  html:
+    toc: true
+    toc-depth: 4
+    number-sections: true
+    number-depth: 4
+    code-fold: show
+    echo: true
+    error: true
+    embed-resources: true
+    self-contained-math: true
+---
+
+# Intro
+
+This is a [Quarto](https://quarto.org) file.
+Quarto enables you to weave together content and executable code into a finished document.
+When you execute code within the notebook, the results appear beneath the code. 
+This allows you to share your analyses and results with others so that they can see the results in line with the code for reproducibility.
+Make sure to have only one sentence per line.
+To learn more about Quarto see <https://quarto.org>.
+For course instructions on using Quarto, see here: <https://isaactpetersen.github.io/QuartoBlogFantasyFootball/posts/quarto-instructions/>.
+
+# Preamble
+
+## Install Libraries
+
+```{r}
+#install.packages("remotes")
+#remotes::install_github("DevPsyLab/petersenlab")
+#remotes::install_github("FantasyFootballAnalytics/ffanalytics")
+
+#update.packages(ask = FALSE)
+```
+
+## Load Libraries
+
+```{r}
+#| message: false
+#| warning: false
+
+library("nflplotR")
+library("plotly")
+library("gghighlight")
+library("ggridges")
+library("ggExtra")
+library("patchwork")
+library("tidyverse")
+```
+
+## Load Data
+
+Load the data file that is in the following location: `./Data/player_stats_weekly.Rdata` (if running locally) or `../Data/player_stats_weekly.Rdata` (if rendering).
+
+```{r}
+
+```
+
+# Univariate Distribution
+
+## Histogram
+
+Create a histogram of weekly fantasy points among QBs, RBs, WRs, and TEs (the variable is `fantasyPoints`):
+
+```{r}
+ggplot2::ggplot(
+  data = INSERT %>%
+    filter(position_group %in% c("QB","RB","WR","TE")),
+  mapping = aes(
+    x = fantasyPoints)
+) +
+  geom_INSERT(
+    color = "INSERT",
+    fill = "INSERT"
+  ) +
+  labs(
+    x = "INSERT",
+    y = "INSERT",
+    title = "INSERT"
+  )
+```
+
+## Density Plot
+
+Create a density plot of weekly fantasy points by position among QBs, RBs, WRs, and TEs (the variable is `fantasyPoints`):
+
+```{r}
+
+```
+
+# Scatterplot
+
+Examine the association between age and weekly fantasy points among WRs:
+
+```{r}
+
+```
+
+# Bar Plot
+
+Examine a bar plot of weekly fantasy points by position among QBs, RBs, WRs, and TEs:
+
+```{r}
+
+```
+
+# Session Info
+
+```{r}
+sessionInfo()
+```
