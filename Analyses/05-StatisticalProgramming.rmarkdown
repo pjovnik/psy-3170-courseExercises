@@ -15,6 +15,8 @@ format:
     self-contained-math: true
 ---
 
+
+
 # Intro
 
 This is a [Quarto](https://quarto.org) file.
@@ -29,15 +31,21 @@ For course instructions on using Quarto, see here: <https://isaactpetersen.githu
 
 ## Install Libraries
 
+
+
 ```{r}
 #install.packages("remotes")
 #remotes::install_github("DevPsyLab/petersenlab")
-remotes::install_github("FantasyFootballAnalytics/ffanalytics")
+#remotes::install_github("FantasyFootballAnalytics/ffanalytics")
 
-update.packages(ask = FALSE)
+#update.packages(ask = FALSE)
 ```
 
+
+
 ## Load Libraries
+
+
 
 ```{r}
 #| message: false
@@ -49,23 +57,31 @@ library("tidyverse")
 ```
 
 
+
+
 ## Load Data
 
-Load the data file that is in the following location: `./Data/player_stats_weekly.RData` (if running locally) or `../Data/player_stats_weekly.RData` (if rendering).
+Load the data file that is in the following location: `./Data/player_stats_weekly.Rdata` (if running locally) or `../Data/player_stats_weekly.Rdata` (if rendering).
+
+
 
 ```{r}
-load("./Data/player_stats_weekly.Rdata")
+load("../Data/player_stats_weekly.Rdata")
 ```
+
+
 
 ## Download Data
 
 Download the injuries data and load it into an object called `nfl_injuries`:
 
+
+
 ```{r}
-nfl_injuries <- progressr::with_progress(
-  nflreadr::load_injuries(seasons = TRUE))
 
 ```
+
+
 
 # Characteristics of the Data
 
@@ -73,50 +89,73 @@ nfl_injuries <- progressr::with_progress(
 
 Identify the variable names in the data file.
 
+
+
 ```{r}
-base::names(nfl_injuries)
 
 ```
+
+
 
 ## Data Structure
 
 Examine the data structure.
 
+
+
 ```{r}
 str(player_stats_weekly)
 ```
+
+
 
 ## Data Dimensions
 
 Determine the dimensions (i.e., the number of rows and columns) of the data.
 
+
+
 ```{r}
-dim(player_stats_weekly)
+
 ```
+
+
 
 ## Number of Missing Elements
 
 Determine how many missing (`NA`) elements there are in the data file.
 
+
+
 ```{r}
 length(which(is.na(player_stats_weekly)))
 ```
+
+
 
 ## Number of Non-Missing Elements
 
 Determine how many non-missing elements there are in the data file.
 
+
+
 ```{r}
 
 ```
 
+
+
 ## View the Data
+
+
 
 ```{r}
 player_stats_weekly
 
 View(player_stats_weekly)
 ```
+
+
 
 # Data Processing
 
@@ -131,13 +170,19 @@ Keep just the following columns:
 - `week`
 - `fantasyPoints`
 
+
+
 ```{r}
 
 ```
 
+
+
 ## Long to Wide
 
 2. Create a new object, `mydata_wide`, that widens `mydata` by season and week.
+
+
 
 ```{r}
 mydata_wide <- mydata %>% 
@@ -148,9 +193,13 @@ mydata_wide <- mydata %>%
   )
 ```
 
+
+
 ## Wide to Long
 
 3. Create a new object, `mydata_long`, that lengthens the data by season and week.
+
+
 
 ```{r}
 mydata_long <- mydata_wide %>% 
@@ -167,18 +216,27 @@ mydata_long <- mydata_wide %>%
   dplyr::select(-prefix)
 ```
 
+
+
 ## Merging
 
 Merge the `player_stats_weekly` object with the `nfl_injuries` object by player, season, and week.
 The player's ID is labeled `player_id` in the `player_stats_weekly` object; it is labeled `gsis_id` in the `nfl_injuries` object.
 Merge so that you only keep the records from `player_stats_weekly` object.
 
+
+
 ```{r}
 
 ```
 
+
+
 # Session Info
+
+
 
 ```{r}
 sessionInfo()
 ```
+
