@@ -23,7 +23,7 @@ library("tidyverse")
 # Load the data file that is in the following location: `./Data/player_stats_weekly.Rdata` (if running locally) or `../Data/player_stats_weekly.Rdata` (if rendering):
 
 load(file = "./Data/player_stats_weekly.RData") # if running locally
-load(file = "../Data/player_stats_weekly.RData") # if "rendering" (which uses the Anaylses folder as the relative path)
+load(file = "../Data/player_stats_weekly.RData") # if "rendering" (which uses the Analyses folder as the relative path)
 
 ## Download Data ----
 
