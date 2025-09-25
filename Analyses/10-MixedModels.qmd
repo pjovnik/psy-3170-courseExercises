@@ -100,7 +100,7 @@ table(player_stats_seasonal_offense_subset$position) # the first position listed
 
 # Null Model
 
-Fit a null model for predicting fantasy points:
+Fit a null model for predicting fantasy points (`fantasyPoints`):
 
 ```{r}
 pointsPerWeek_nullModel <- lm(
