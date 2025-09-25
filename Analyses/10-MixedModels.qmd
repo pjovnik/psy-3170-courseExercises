@@ -1,0 +1,295 @@
+---
+title: "10-Mixed Models"
+author: "Insert Your Name Here"
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+format:
+  html:
+    toc: true
+    toc-depth: 4
+    number-sections: true
+    number-depth: 4
+    code-fold: show
+    echo: true
+    error: true
+    embed-resources: true
+    self-contained-math: true
+---
+
+# Intro
+
+This is a [Quarto](https://quarto.org) file.
+Quarto enables you to weave together content and executable code into a finished document.
+When you execute code within the notebook, the results appear beneath the code. 
+This allows you to share your analyses and results with others so that they can see the results in line with the code for reproducibility.
+Make sure to have only one sentence per line.
+To learn more about Quarto see <https://quarto.org>.
+For course instructions on using Quarto, see here: <https://isaactpetersen.github.io/QuartoBlogFantasyFootball/posts/quarto-instructions/>.
+
+# Preamble
+
+## Install Libraries
+
+```{r}
+#install.packages("remotes")
+#remotes::install_github("DevPsyLab/petersenlab")
+#remotes::install_github("FantasyFootballAnalytics/ffanalytics")
+
+#update.packages(ask = FALSE)
+```
+
+## Load Libraries
+
+```{r}
+#| message: false
+#| warning: false
+
+library("lme4")
+library("lmerTest")
+library("effectsize")
+library("MuMIn")
+library("emmeans")
+library("sjstats")
+library("mgcv")
+library("AICcmodavg")
+library("bbmle")
+library("rstan")
+library("brms")
+library("cmdstanr") # todo: install.packages("cmdstanr", repos = c("https://stan-dev.r-universe.dev", getOption("repos"))); cmdstanr::check_cmdstan_toolchain(); cmdstanr::install_cmdstan()
+library("fitdistrplus")
+library("performance")
+library("parallelly")
+library("broom.mixed")
+library("tidybayes")
+library("plotly")
+library("viridis")
+library("tidyverse")
+```
+
+```{r}
+emm_options(lmerTest.limit = 100000)
+emm_options(pbkrtest.limit = 100000)
+```
+
+## Load Data
+
+Load the data file that is in the following location: `./Data/player_stats_weekly.Rdata` (if running locally) or `../Data/player_stats_weekly.Rdata` (if rendering).
+
+```{r}
+
+```
+
+## Prepare Data
+
+Subset the data to offensive positions and create the necessary variables:
+
+```{r}
+player_stats_seasonal_offense_subset <- player_stats_weekly %>% 
+  dplyr::filter(position_group %in% c("QB","RB","WR","TE") | position %in% c("K"))
+
+player_stats_seasonal_offense_subset$position[which(player_stats_seasonal_offense_subset$position == "HB")] <- "RB"
+
+player_stats_seasonal_offense_subset$player_idFactor <- factor(player_stats_seasonal_offense_subset$player_id)
+player_stats_seasonal_offense_subset$positionFactor <- factor(player_stats_seasonal_offense_subset$position)
+```
+
+See values of position:
+
+```{r}
+table(player_stats_seasonal_offense_subset$position) # the first position listed (FB) is our reference group
+```
+
+# Null Model
+
+Fit a null model for predicting fantasy points:
+
+```{r}
+pointsPerWeek_nullModel <- lm(
+  INSERT ~ INSERT,
+  data = player_stats_seasonal_offense_subset,
+  na.action = "na.exclude"
+)
+
+summary(pointsPerWeek_nullModel)
+```
+
+# Add Position as a Fixed-Effect Predictor
+
+Add position (`position`) as a fixed-effect predictor:
+
+```{r}
+pointsPerWeek_position <- lm(
+  INSERT ~ INSERT,
+  data = player_stats_seasonal_offense_subset,
+  na.action = "na.exclude"
+)
+
+summary(pointsPerWeek_position)
+```
+
+# Add Random Intercepts
+
+Add random intercepts for each player:
+
+```{r}
+pointsPerWeek_randomIntercepts <- lmerTest::lmer(
+  INSERT ~ INSERT + (INSERT | INSERT),
+  data = player_stats_seasonal_offense_subset,
+  REML = FALSE,
+  control = lmerControl(optimizer = "bobyqa")
+)
+
+summary(pointsPerWeek_randomIntercepts)
+```
+
+# Add Fixed Linear Effect of Age (i.e., Fixed Slopes) and Interaction with Position
+
+Add a fixed linear effect of age, centered at age 20 (`ageCentered20`), and its interaction with position (`position`) as fixed-effect predictors:
+
+```{r}
+pointsPerWeek_fixedLinearSlopes <- lmerTest::lmer(
+  INSERT ~ INSERT + INSERT + INSERT:INSERT + (INSERT | INSERT),
+  data = player_stats_seasonal_offense_subset,
+  REML = FALSE,
+  control = lmerControl(optimizer = "bobyqa")
+)
+
+summary(pointsPerWeek_fixedLinearSlopes)
+```
+
+# Add Random Linear Effect of Age (i.e., Random Slopes)
+
+Add a random linear effect of age, centered at age 20 (`ageCentered20`):
+
+```{r}
+pointsPerWeek_randomLinearSlopes <- lmerTest::lmer(
+  INSERT ~ INSERT + INSERT + INSERT:INSERT + (INSERT + INSERT | INSERT),
+  data = player_stats_seasonal_offense_subset,
+  REML = FALSE,
+  control = lmerControl(optimizer = "bobyqa")
+)
+
+summary(pointsPerWeek_randomLinearSlopes)
+```
+
+# Add Fixed Quadratic Effect of Age (i.e., Fixed Slopes) and Interaction with Position
+
+Add a fixed quadratic effect of age, centered at age 20 (`ageCentered20Quadratic`), and its interaction with position (`position`) as fixed-effect predictors:
+
+```{r}
+pointsPerWeek_fixedQuadraticSlopes <- lmerTest::lmer(
+  INSERT ~ INSERT + INSERT + INSERT:INSERT + INSERT + INSERT:INSERT + (INSERT + INSERT | INSERT),
+  data = player_stats_seasonal_offense_subset,
+  REML = FALSE,
+  control = lmerControl(optimizer = "bobyqa")
+)
+
+summary(pointsPerWeek_fixedQuadraticSlopes)
+```
+
+# Compare Models
+
+Which model was the best fitting?
+
+Linear regression models:
+
+```{r}
+anova(
+  pointsPerWeek_nullModel,
+  pointsPerWeek_position)
+```
+
+Best-fitting linear regression model versus mixed effect model with random intercepts:
+
+```{r}
+lmVsMixedModel <- list(
+  "positionModel" = pointsPerWeek_position,
+  "randomIntercepts" = pointsPerWeek_randomIntercepts
+)
+
+AIC(
+  pointsPerWeek_position,
+  pointsPerWeek_randomIntercepts)
+
+bbmle::AICctab(lmVsMixedModel)
+```
+
+Best-fitting mixed model:
+
+```{r}
+mixedModels <- list(
+  "randomIntercepts" = pointsPerWeek_randomIntercepts,
+  "fixedLinear" = pointsPerWeek_fixedLinearSlopes,
+  "randomLinear" = pointsPerWeek_randomLinearSlopes,
+  "randomLinearFixedQuadratic" = pointsPerWeek_fixedQuadraticSlopes
+)
+
+AIC(
+  pointsPerWeek_randomIntercepts,
+  pointsPerWeek_fixedLinearSlopes,
+  pointsPerWeek_randomLinearSlopes,
+  pointsPerWeek_fixedQuadraticSlopes
+)
+
+AICcmodavg::aictab(mixedModels)
+
+anova(
+  #pointsPerWeek_randomIntercepts, # throws error because not removes rows where players do not have value for age variable
+  pointsPerWeek_fixedLinearSlopes,
+  pointsPerWeek_randomLinearSlopes,
+  pointsPerWeek_fixedQuadraticSlopes
+)
+```
+
+# Plot of Fantasy Points Per Week by Age and Position
+
+Using the best-fitting model, generate a plot of fantasy points per week by position.
+
+Create a `newdata` object for generating the plots of model-implied fantasy points by age and position:
+
+```{r}
+pointsPerWeek_positionAge_newData <- expand.grid(
+  position = factor(c("FB","QB","RB","TE","WR","K")),
+  age = seq(from = 20, to = 40, length.out = 10000)
+)
+
+pointsPerWeek_positionAge_newData$ageCentered20 <- pointsPerWeek_positionAge_newData$age - 20
+pointsPerWeek_positionAge_newData$ageCentered20Quadratic <- pointsPerWeek_positionAge_newData$ageCentered20 ^ 2
+pointsPerWeek_positionAge_newData$years_of_experience <- floor(pointsPerWeek_positionAge_newData$age - 22) # assuming that most players start at age 22 (i.e., rookie year) and thus have 1 year of experience at age 23
+pointsPerWeek_positionAge_newData$years_of_experience[which(pointsPerWeek_positionAge_newData$years_of_experience < 0)] <- 0
+```
+
+Generate the model-implied predictions:
+
+```{r}
+pointsPerWeek_positionAge_newData$fantasyPoints <- predict(
+  object = INSERT,
+  newdata = INSERT,
+  re.form = NA
+)
+```
+
+Generate the plot:
+
+```{r}
+ggplot2::ggplot(
+  data = INSERT,
+  mapping = aes(
+    x = age,
+    y = INSERT,
+    color = position
+  )
+) + 
+  geom_smooth() +
+  labs(
+    x = "INSERT",
+    y = "INSERT",
+    title = "INSERT",
+    color = "INSERT"
+  )
+```
+
+# Session Info
+
+```{r}
+sessionInfo()
+```
