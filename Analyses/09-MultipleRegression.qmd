@@ -1,0 +1,206 @@
+---
+title: "09-Multiple Regression"
+author: "Insert Your Name Here"
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+format:
+  html:
+    toc: true
+    toc-depth: 4
+    number-sections: true
+    number-depth: 4
+    code-fold: show
+    echo: true
+    error: true
+    embed-resources: true
+    self-contained-math: true
+---
+
+# Intro
+
+This is a [Quarto](https://quarto.org) file.
+Quarto enables you to weave together content and executable code into a finished document.
+When you execute code within the notebook, the results appear beneath the code. 
+This allows you to share your analyses and results with others so that they can see the results in line with the code for reproducibility.
+Make sure to have only one sentence per line.
+To learn more about Quarto see <https://quarto.org>.
+For course instructions on using Quarto, see here: <https://isaactpetersen.github.io/QuartoBlogFantasyFootball/posts/quarto-instructions/>.
+
+# Preamble
+
+## Install Libraries
+
+```{r}
+#install.packages("remotes")
+#remotes::install_github("DevPsyLab/petersenlab")
+#remotes::install_github("FantasyFootballAnalytics/ffanalytics")
+
+#update.packages(ask = FALSE)
+```
+
+## Load Libraries
+
+```{r}
+#| message: false
+#| warning: false
+
+library("petersenlab")
+library("rms")
+library("car")
+library("bestNormalize")
+library("lme4")
+library("performance")
+library("lavaan")
+library("mice")
+library("miceadds")
+library("interactions")
+library("brms")
+library("parallelly")
+library("robustbase")
+library("ordinal")
+library("MASS")
+library("broom")
+library("effectsize")
+library("tidymodels")
+library("tidyverse")
+library("knitr")
+```
+
+## Load Data
+
+Load the data file that is in the following location: `./Data/player_stats_weekly.Rdata` (if running locally) or `../Data/player_stats_weekly.Rdata` (if rendering).
+
+```{r}
+
+```
+
+# Correlation Coefficient
+
+What is the association (*r*- and *p*-value) between pass attempts (`attempts`) and completion percentage (`pass_comp_pct`) among QBs?
+
+```{r}
+cor.test(
+  ~ INSERT + INSERT,
+  data = player_stats_weekly %>% filter(position == "INSERT")
+)
+```
+
+# Scatterplot with Best-Fit Line
+
+Provide a scatterplot with a best-fit line of the association between pass attempts (`attempts`) and completion percentage (`pass_comp_pct`) among QBs.
+What is the shape of the association?
+
+```{r}
+ggplot2::INSERT(
+  data = player_stats_weekly %>% filter(position == "INSERT"),
+  aes(
+    x = INSERT,
+    y = INSERT)) +
+  geom_point() +
+  geom_smooth(
+    method = "lm",  # linear best-fit line
+    color = "red") +
+  geom_smooth(
+    method = "gam", # nonlinear best-fit line
+    color = "blue"
+  ) +
+  labs(
+    x = "INSERT",
+    y = "INSERT",
+    title = "INSERT"
+  )
+```
+
+Notice how completion percentage ranges from 0–1.
+What type of regression would be optimal for predicting completion percentage?
+
+# Regression Model with One Predictor
+
+Fit a linear regression model with one predictor, pass attempts (`attempts`), predicting completion percentage (`pass_comp_pct`) among QBs.
+Evaluate the results from the regression model.
+What percent of the variance was explained by the model?
+How does the standardized regression coefficient (beta) compare to the correlation coefficient (*r*-value) you obtained earlier?
+
+```{r}
+regressionOnePredictor <- INSERT(
+  INSERT ~ INSERT,
+  data = player_stats_weekly %>% filter(position %in% c("INSERT")),
+  na.action = "na.exclude"
+)
+
+summary(regressionOnePredictor)
+print(effectsize::standardize_parameters(regressionOnePredictor, method = "refit"), digits = 4)
+```
+
+# Regression Model with Two Predictors
+
+Now fit a linear regression model that adds the player's age (`age`) as a covariate to control for age.
+Evaluate the results from the regression model.
+Did the percent of variance explained by the model increase or decrease?
+Did the beta for attempts increase or decrease?
+Does completion percentage increase or decrease with age?
+
+```{r}
+regressionTwoPredictors <- INSERT(
+  INSERT ~ INSERT + INSERT,
+  data = player_stats_weekly %>% filter(position %in% c("INSERT")),
+  na.action = "na.exclude"
+)
+
+summary(regressionTwoPredictors)
+print(effectsize::standardize_parameters(regressionTwoPredictors, method = "refit"), digits = 4)
+```
+
+# Model-Implied Predictions
+
+Generate the model-implied visualization of completion percentage by passing attempts.
+
+```{r}
+newdata1 <- data.frame(
+  attempts = seq(
+    from = min(player_stats_weekly$INSERT[which(player_stats_weekly$position == "INSERT")], na.rm = TRUE),
+    to = max(player_stats_weekly$INSERT[which(player_stats_weekly$position == "INSERT")], na.rm = TRUE),
+    length.out = 1000
+  ),
+  age = mean(player_stats_weekly$INSERT[which(player_stats_weekly$position == "INSERT")], na.rm = TRUE)
+)
+
+newdata1$pass_comp_pct <- predict(
+  regressionTwoPredictors,
+  newdata = newdata1
+)
+
+ggplot2::INSERT(
+  data = newdata1,
+  aes(
+    x = attempts,
+    y = pass_comp_pct)) +
+  geom_smooth() +
+  coord_cartesian(
+    ylim = c(0, NA),
+    expand = FALSE) +
+  labs(
+    x = "INSERT",
+    y = "INSERT",
+    title = "INSERT"
+  )
+```
+
+Using the regression model with two predictors, determine the model-implied completion percentage for a 35-year-old QB who has 40 pass attempts in a game.
+
+```{r}
+newdata2 <- data.frame(
+  attempts = INSERT,
+  age = INSERT
+)
+
+predict(
+  regressionTwoPredictors,
+  newdata = INSERT
+)
+```
+
+# Session Info
+
+```{r}
+sessionInfo()
+```
