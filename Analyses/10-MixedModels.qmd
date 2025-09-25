@@ -128,7 +128,7 @@ summary(pointsPerWeek_position)
 
 # Add Random Intercepts
 
-Add random intercepts for each player:
+Add random intercepts for each player (`player_idFactor`):
 
 ```{r}
 pointsPerWeek_randomIntercepts <- lmerTest::lmer(
