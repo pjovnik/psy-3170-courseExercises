@@ -1,0 +1,141 @@
+---
+title: "11-Causal Inference"
+author: "Insert Your Name Here"
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+format:
+  html:
+    toc: true
+    toc-depth: 4
+    number-sections: true
+    number-depth: 4
+    code-fold: show
+    echo: true
+    error: true
+    embed-resources: true
+    self-contained-math: true
+---
+
+# Intro
+
+This is a [Quarto](https://quarto.org) file.
+Quarto enables you to weave together content and executable code into a finished document.
+When you execute code within the notebook, the results appear beneath the code. 
+This allows you to share your analyses and results with others so that they can see the results in line with the code for reproducibility.
+Make sure to have only one sentence per line.
+To learn more about Quarto see <https://quarto.org>.
+For course instructions on using Quarto, see here: <https://isaactpetersen.github.io/QuartoBlogFantasyFootball/posts/quarto-instructions/>.
+
+# Preamble
+
+## Install Libraries
+
+```{r}
+#install.packages("remotes")
+#remotes::install_github("DevPsyLab/petersenlab")
+#remotes::install_github("FantasyFootballAnalytics/ffanalytics")
+
+#update.packages(ask = FALSE)
+```
+
+## Load Libraries
+
+```{r}
+#| message: false
+#| warning: false
+
+library("dagitty")
+library("ggdag")
+```
+
+# Causal Diagrams
+
+## Diagram 1
+
+Your research question is: What is the effect of past performance on future performance, in terms of fantasy points?
+Your hypothesis is that past performance and injury status influence a coach's confidence in a player, which in turn influences their snap share, which in turn influences their number of touches/targets, which in turn influences their fantasy points.
+Draw a causal diagram (i.e., directed acyclic graph [DAG]) of the hypothesized causal model.
+
+```{r}
+causalDiagram1 <- ggdag::dagify(
+  coachConfidenceInPlayer ~ INSERT + INSERT,
+  snapShare ~ INSERT,
+  touchesOrTargets ~ INSERT,
+  fantasyPoints ~ INSERT
+)
+
+ggdag::ggdag(causalDiagram1, text_col = "orange") + theme_dag_blank()
+```
+
+Your prediction is that a player's fantasy points in the prior week will predict their fantasy points in the future week.
+Using the `adjustmentSets()` function, which variable(s) in the model should you control for to obtain an unbiased estimate of the (total) association between past performance and future performance?
+Should you control for injury status?
+Should you control for snap share?
+
+```{r}
+dagitty::adjustmentSets(
+  causalDiagram1,
+  exposure = "INSERT",
+  outcome = "INSERT",
+  effect = "total")
+```
+
+## Diagram 2
+
+Your research question is: How does a Quarterback's intelligence influence their average time to throw?
+Your hypothesis is that more intelligent Quarterbacks process information more quickly, which leads them to picking a receiving target more quickly, which leads them to have a shorter average time to throw.
+You also expect there are factors, including age, that influence both (a) the Quarterback's intelligence and (b) the average time to throw.
+Other factors that influence the Quarterback's intelligence include their nutrition.
+Other factors that influence the player's average time to throw include the strength of the offensive and defensive lines.
+
+Draw the hypothesized causal diagram:
+
+```{r}
+causalDiagram2 <- ggdag::dagify(
+ #INSERT ALL HYPOTHESIZED CAUSAL EFFECTS
+)
+
+ggdag::ggdag(causalDiagram2, text_col = "orange") + theme_dag_blank()
+```
+
+Your prediction is that Quarterbacks with higher intelligence scores on the Wonderlic test will show a faster average time to throw compared to Quarterbacks with lower intelligence scores on the Wonderlic test.
+Using the `adjustmentSets()` function, determine which variable(s) in the model you should control for to obtain an unbiased estimate of the (total) association between the Quarterback's intelligence and their average time to throw.
+
+```{r}
+dagitty::adjustmentSets(
+  causalDiagram2,
+  exposure = "INSERT",
+  outcome = "INSERT",
+  effect = "total")
+```
+
+## Diagram 3
+
+In preparation for your next blog post, formulate a research question that you may be interested in testing.
+Now, formulate your hypothesis (i.e., proposed causal explanation) in regards to your hypothesis.
+Draw your own hypothesized causal model for your research question.
+Make sure to specify possible confounds in your causal diagram (i.e., factors that influence both your hypothesized cause and the hypothesized effect).
+For examples of research questions and hypotheses, see diagrams 1 and 2 (above).
+
+Research Question:
+
+Hypothesis:
+
+Causal diagram (DAG):
+
+```{r}
+
+```
+
+Prediction: 
+
+Now determine what variables you should control for to obtain an unbiased estimate of the association between your hypothesized cause and the hypothesized effect.
+
+```{r}
+
+```
+
+# Session Info
+
+```{r}
+sessionInfo()
+```
