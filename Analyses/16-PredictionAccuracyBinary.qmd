@@ -1,0 +1,232 @@
+---
+title: "16-Evaluation of Prediction/Forecasting Accuracy: Binary Classification"
+author: "Insert Your Name Here"
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+format:
+  html:
+    toc: true
+    toc-depth: 4
+    number-sections: true
+    number-depth: 4
+    code-fold: show
+    echo: true
+    error: true
+    embed-resources: true
+    self-contained-math: true
+---
+
+# Intro
+
+This is a [Quarto](https://quarto.org) file.
+Quarto enables you to weave together content and executable code into a finished document.
+When you execute code within the notebook, the results appear beneath the code. 
+This allows you to share your analyses and results with others so that they can see the results in line with the code for reproducibility.
+Make sure to have only one sentence per line.
+To learn more about Quarto see <https://quarto.org>.
+For course instructions on using Quarto, see here: <https://isaactpetersen.github.io/QuartoBlogFantasyFootball/posts/quarto-instructions/>.
+
+# Preamble
+
+## Install Libraries
+
+```{r}
+#install.packages("remotes")
+#remotes::install_github("DevPsyLab/petersenlab")
+#remotes::install_github("FantasyFootballAnalytics/ffanalytics")
+
+#update.packages(ask = FALSE)
+```
+
+## Load Libraries
+
+```{r}
+#| message: false
+#| warning: false
+
+library("petersenlab")
+library("pROC")
+library("magrittr")
+library("viridis")
+library("viridisLite")
+library("msir")
+library("tidymodels")
+library("tidyverse")
+```
+
+## Specify Options
+
+```{r}
+options(scipen = 999) # prevent scientific notation
+```
+
+## Load Data
+
+Load the data file that is in the following location: `./Data/player_stats_weekly.Rdata` (if running locally) or `../Data/player_stats_weekly.Rdata` (if rendering).
+
+```{r}
+#| eval: false
+
+load(file = "./Data/player_stats_weekly.RData") # if running locally
+load(file = "./Data/players_projections_weekly.RData") # if running locally
+load(file = "./Data/nfl_playerIDs.RData") # if running locally
+```
+
+```{r}
+load(file = "../Data/player_stats_weekly.RData") # if "rendering" (which uses the Analyses folder as the relative path)
+load(file = "../Data/players_projections_weekly.RData") # if "rendering" (which uses the Analyses folder as the relative path)
+load(file = "../Data/nfl_playerIDs.RData") # if "rendering" (which uses the Analyses folder as the relative path)
+```
+
+## Prepare Data
+
+```{r}
+player_stats_weekly_subset <- player_stats_weekly %>% 
+  filter(!is.na(player_id))
+
+nfl_playerIDs_subset <- nfl_playerIDs %>% 
+  filter(!is.na(gsis_id)) %>% 
+  distinct(gsis_id, .keep_all = TRUE) %>% # keep only rows that do not have duplicate values of gsis_id
+  select(-all_of(c("team", "position", "height", "weight", "age")))
+
+players_projectedPoints_weekly_combined$season <- as.integer(players_projectedPoints_weekly_combined$season)
+players_projections_weekly_average_merged$season <- as.integer(players_projections_weekly_average_merged$season)
+
+player_stats_weekly_subset_IDs <- left_join(
+  player_stats_weekly_subset,
+  nfl_playerIDs_subset,
+  by = c("player_id" = "gsis_id")
+) %>% 
+  filter(!is.na(mfl_id))
+
+projectionsWithActuals_weekly <- full_join(
+  player_stats_weekly_subset_IDs,
+  players_projectedPoints_weekly_combined,
+  by = c("mfl_id" = "id", "season", "week"),
+  suffix = c("", "_proj"),
+)
+
+crowdAveragedProjectionsWithActuals_weekly <- full_join(
+  player_stats_weekly_subset_IDs,
+  players_projections_weekly_average_merged,
+  by = c("mfl_id" = "id", "season", "week"),
+  suffix = c("", "_proj"),
+)
+
+projectionsWithActuals_weekly <- projectionsWithActuals_weekly %>% 
+  unite(
+    "player_id_season_week",
+    player_id,
+    season,
+    week,
+    remove = FALSE
+  )
+
+crowdAveragedProjectionsWithActuals_weekly <- crowdAveragedProjectionsWithActuals_weekly %>% 
+  unite(
+    "player_id_season_week",
+    player_id,
+    season,
+    week,
+    remove = FALSE
+  )
+```
+
+# Predicting Whether a RB Will Get 150+ Rushing Yards in a Game
+
+Using a Running Back's rushing yards in a given game, we will predict whether or not the Running Back will get 150+ rushing yards in their next game (`rush_150_yds`).
+First, we prepare the data:
+
+```{r}
+player_stats_weekly_example <- player_stats_weekly %>% 
+  filter(position == "RB") %>% 
+  arrange(player_id, season, week) %>% 
+  group_by(player_id, season) %>% 
+  mutate(rushing_yards_priorGame = lag(rushing_yards)) %>% # obtain a player's rushing yards from their prior game using the dplyr::lag() function
+  ungroup()
+
+player_stats_weekly_example %>% 
+  select(player_id, season, week, rushing_yards, rushing_yards_priorGame) %>% 
+  head()
+```
+
+## Accuracy at a Particular Cutoff
+
+Provide the accuracy for predicting whether or not the Running Back will get 150+ rushing yards in their next game (`rush_150_yds`) using a cutoff of 100 rushing yards from their previous game (`rushing_yards_priorGame`):
+
+```{r}
+petersenlab::accuracyAtCutoff(
+  predicted = player_stats_weekly_example$INSERT,
+  actual = player_stats_weekly_example$INSERT,
+  cutoff = INSERT
+)
+```
+
+Now, lower the cutoff to 50 rushing yards from their previous game:
+
+```{r}
+petersenlab::accuracyAtCutoff(
+  predicted = player_stats_weekly_example$INSERT,
+  actual = player_stats_weekly_example$INSERT,
+  cutoff = INSERT
+)
+```
+
+What happened to each of the following (did they increase or decrease)?:
+
+- sensitivity (SN)
+- specificity (SP)
+- positive predictive value (PPV)
+- negative predictive value (NPV)
+
+Now, raise the cutoff to 150 rushing yards from their previous game:
+
+```{r}
+petersenlab::accuracyAtCutoff(
+  predicted = player_stats_weekly_example$INSERT,
+  actual = player_stats_weekly_example$INSERT,
+  cutoff = INSERT
+)
+```
+
+What happened to each of the following (did they increase or decrease)?:
+
+- sensitivity (SN)
+- specificity (SP)
+- positive predictive value (PPV)
+- negative predictive value (NPV)
+
+## Accuracy at Each Possible Cutoff
+
+Using a Running Back's rushing yards in a given game, find the accuracy at each possible cutoff.
+
+```{r}
+petersenlab::accuracyAtEachCutoff(
+  predicted = player_stats_weekly_example$INSERT,
+  actual = player_stats_weekly_example$INSERT
+)
+```
+
+## Receiver Operating Characteristic (ROC) Curve
+
+```{r}
+rocCurve <- pROC::roc(
+  data = player_stats_weekly_example,
+  response = INSERT,
+  predictor = INSERT,
+  smooth = FALSE)
+
+rocCurve$auc
+
+plot(
+  rocCurve,
+  legacy.axes = TRUE,
+  print.auc = TRUE)
+```
+
+What is the area under the ROC curve (AUC)?
+
+# Session Info
+
+```{r}
+sessionInfo()
+```
