@@ -72,7 +72,7 @@ emm_options(pbkrtest.limit = 100000)
 
 ## Load Data
 
-Load the data file that is in the following location: `./Data/player_stats_weekly.Rdata` (if running locally) or `../Data/player_stats_weekly.Rdata` (if rendering).
+Load the data file that is in the following location: `./Data/player_stats_weekly.RData` (if running locally) or `../Data/player_stats_weekly.RData` (if rendering).
 
 ```{r}
 
@@ -100,7 +100,7 @@ table(player_stats_seasonal_offense_subset$position) # the first position listed
 
 # Null Model
 
-Fit a null model for predicting fantasy points:
+Fit a null model for predicting fantasy points (`fantasyPoints`):
 
 ```{r}
 pointsPerWeek_nullModel <- lm(
@@ -128,7 +128,7 @@ summary(pointsPerWeek_position)
 
 # Add Random Intercepts
 
-Add random intercepts for each player:
+Add random intercepts for each player (`player_idFactor`):
 
 ```{r}
 pointsPerWeek_randomIntercepts <- lmerTest::lmer(
