@@ -1,0 +1,314 @@
+---
+title: "18-Evaluation of Prediction/Forecasting Accuracy: Continuous Outcomes"
+author: "Insert Your Name Here"
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+format:
+  html:
+    toc: true
+    toc-depth: 4
+    number-sections: true
+    number-depth: 4
+    code-fold: show
+    echo: true
+    error: true
+    embed-resources: true
+    self-contained-math: true
+---
+
+# Intro
+
+This is a [Quarto](https://quarto.org) file.
+Quarto enables you to weave together content and executable code into a finished document.
+When you execute code within the notebook, the results appear beneath the code. 
+This allows you to share your analyses and results with others so that they can see the results in line with the code for reproducibility.
+Make sure to have only one sentence per line.
+To learn more about Quarto see <https://quarto.org>.
+For course instructions on using Quarto, see here: <https://isaactpetersen.github.io/QuartoBlogFantasyFootball/posts/quarto-instructions/>.
+
+# Preamble
+
+## Install Libraries
+
+```{r}
+#install.packages("remotes")
+#remotes::install_github("DevPsyLab/petersenlab")
+#remotes::install_github("FantasyFootballAnalytics/ffanalytics")
+
+#update.packages(ask = FALSE)
+```
+
+## Load Libraries
+
+```{r}
+#| message: false
+#| warning: false
+
+library("petersenlab")
+library("pROC")
+library("magrittr")
+library("viridis")
+library("viridisLite")
+library("msir")
+library("tidymodels")
+library("tidyverse")
+```
+
+## Specify Options
+
+```{r}
+options(scipen = 999) # prevent scientific notation
+```
+
+## Load Data
+
+Load the data file that is in the following location: `./Data/player_stats_weekly.Rdata` (if running locally) or `../Data/player_stats_weekly.Rdata` (if rendering).
+
+```{r}
+#| eval: false
+
+load(file = "./Data/player_stats_weekly.RData") # if running locally
+load(file = "./Data/players_projections_weekly.RData") # if running locally
+load(file = "./Data/nfl_playerIDs.RData") # if running locally
+```
+
+```{r}
+load(file = "../Data/player_stats_weekly.RData") # if "rendering" (which uses the Analyses folder as the relative path)
+load(file = "../Data/players_projections_weekly.RData") # if "rendering" (which uses the Analyses folder as the relative path)
+load(file = "../Data/nfl_playerIDs.RData") # if "rendering" (which uses the Analyses folder as the relative path)
+```
+
+## Prepare Data
+
+```{r}
+player_stats_weekly_subset <- player_stats_weekly %>% 
+  filter(!is.na(player_id))
+
+nfl_playerIDs_subset <- nfl_playerIDs %>% 
+  filter(!is.na(gsis_id)) %>% 
+  distinct(gsis_id, .keep_all = TRUE) %>% # keep only rows that do not have duplicate values of gsis_id
+  select(-all_of(c("team", "position", "height", "weight", "age")))
+
+players_projectedPoints_weekly_combined$season <- as.integer(players_projectedPoints_weekly_combined$season)
+players_projections_weekly_average_merged$season <- as.integer(players_projections_weekly_average_merged$season)
+
+player_stats_weekly_subset_IDs <- left_join(
+  player_stats_weekly_subset,
+  nfl_playerIDs_subset,
+  by = c("player_id" = "gsis_id")
+) %>% 
+  filter(!is.na(mfl_id))
+
+projectionsWithActuals_weekly <- full_join(
+  player_stats_weekly_subset_IDs,
+  players_projectedPoints_weekly_combined,
+  by = c("mfl_id" = "id", "season", "week"),
+  suffix = c("", "_proj"),
+)
+
+crowdAveragedProjectionsWithActuals_weekly <- full_join(
+  player_stats_weekly_subset_IDs,
+  players_projections_weekly_average_merged,
+  by = c("mfl_id" = "id", "season", "week"),
+  suffix = c("", "_proj"),
+)
+
+projectionsWithActuals_weekly <- projectionsWithActuals_weekly %>% 
+  unite(
+    "player_id_season_week",
+    player_id,
+    season,
+    week,
+    remove = FALSE
+  )
+
+crowdAveragedProjectionsWithActuals_weekly <- crowdAveragedProjectionsWithActuals_weekly %>% 
+  unite(
+    "player_id_season_week",
+    player_id,
+    season,
+    week,
+    remove = FALSE
+  )
+```
+
+# Predicting WR Fantasy Points
+
+We will use crowd-averaged projections to predict Wide Receivers' fantasy points.
+First, we prepare the data:
+
+```{r}
+projectionsWithActuals_weekly_wr <- projectionsWithActuals_weekly %>% 
+  filter(position == INSERT)
+
+crowdAveragedProjectionsWithActuals_weekly_wr <- crowdAveragedProjectionsWithActuals_weekly %>% 
+  filter(position == INSERT)
+```
+
+## Accuracy Indices
+
+### Individual Sources of Projections
+
+Provide the accuracy indices for predicting Wide Receivers' fantasy points (`fantasyPoints`) from individual sources of projections of their fantasy points for that week (`raw_points`):
+
+```{r}
+petersenlab::accuracyOverall(
+  predicted = projectionsWithActuals_weekly_wr$INSERT, # predictor variable
+  actual = projectionsWithActuals_weekly_wr$INSERT, # outcome variable
+  dropUndefined = TRUE
+)
+```
+
+### Crowd-Averaged Projections
+
+Provide the accuracy indices for predicting Wide Receivers' fantasy points (`fantasyPoints`) from crowd-averaged projections of their fantasy points for that week (`points`):
+
+```{r}
+petersenlab::accuracyOverall(
+  predicted = crowdAveragedProjectionsWithActuals_weekly_wr$INSERT, # predictor variable
+  actual = crowdAveragedProjectionsWithActuals_weekly_wr$INSERT, # outcome variable
+  dropUndefined = TRUE
+)
+```
+
+Which projections were more accurate according to $R^2$ and mean absolute error (MAE): individual sources of projections or crowd-averaged projections?
+What percent of the variance did the projections explain?
+Did they explain more or less than 50% of the variance?
+Based on that, how accurate would you say the projections are?
+
+## Calibration Plot
+
+### Individual Sources of Projections
+
+```{r}
+#95 prediction interval based on LOESS model
+calibrationLoessModel1 <- msir::loess.sd(
+  x = projectionsWithActuals_weekly_wr$raw_points,
+  y = projectionsWithActuals_weekly_wr$fantasyPoints,
+  nsigma = qnorm(.975),
+  na.action = "na.exclude")
+
+calibrationLoessPredictionInterval1 <- data.frame(
+  x = calibrationLoessModel1$x,
+  y = calibrationLoessModel1$y,
+  lower = calibrationLoessModel1$lower,
+  upper = calibrationLoessModel1$upper)
+
+plotRangeMin1 <- min(calibrationLoessModel1$lower, na.rm = TRUE)
+
+plotRangeMax1 <- max(calibrationLoessModel1$upper, na.rm = TRUE)
+
+ggplot2::ggplot(
+  data = projectionsWithActuals_weekly_wr,
+  aes(
+    x = raw_points,
+    y = fantasyPoints)) + 
+  coord_cartesian(
+    xlim = c(0, plotRangeMax1),
+    ylim = c(plotRangeMin1, plotRangeMax1),
+    expand = FALSE) +
+  scale_x_continuous(breaks = seq(0, plotRangeMax1, by = 5)) +
+  scale_y_continuous(breaks = seq(0, plotRangeMax1, by = 5)) +
+  geom_line(
+    data = calibrationLoessPredictionInterval1,
+    aes(
+      x = x,
+      y = lower),
+    color = "red",
+    linetype = "dashed") + #Lower estimate of 95% prediction interval of linear model
+  geom_line(
+    data = calibrationLoessPredictionInterval1,
+    aes(
+      x = x,
+      y = upper),
+    color = "red",
+    linetype = "dashed") + #Upper estimate of 95% prediction interval of linear model
+  geom_smooth(
+    method = "gam",
+    color = viridisLite::viridis(3)[3],
+    fill = viridisLite::viridis(3)[1],
+    alpha = 0.7) + #95% confidence interval of GAM model
+  geom_abline(
+    slope = 1,
+    intercept = 0) +
+  labs(
+    x = "Projected Fantasy Points",
+    y = "Actual Fantasy Points",
+    title = "Calibration Plot for Weekly Projections of Wide Receivers"
+  ) +
+  theme_classic() + 
+  theme(axis.title.y = element_text(angle = 0, vjust = 0.5)) # horizontal y-axis title
+```
+
+Are the projections calibrated?
+Describe any miscalibration.
+
+### Crowd-Averaged Projections
+
+```{r}
+#95 prediction interval based on LOESS model
+calibrationLoessModel2 <- msir::loess.sd(
+  x = crowdAveragedProjectionsWithActuals_weekly_wr$points,
+  y = crowdAveragedProjectionsWithActuals_weekly_wr$fantasyPoints,
+  nsigma = qnorm(.975),
+  na.action = "na.exclude")
+
+calibrationLoessPredictionInterval2 <- data.frame(
+  x = calibrationLoessModel2$x,
+  y = calibrationLoessModel2$y,
+  lower = calibrationLoessModel2$lower,
+  upper = calibrationLoessModel2$upper)
+
+plotRangeMin2 <- min(calibrationLoessModel2$lower, na.rm = TRUE)
+
+plotRangeMax2 <- max(calibrationLoessModel2$upper, na.rm = TRUE)
+
+ggplot2::ggplot(
+  data = crowdAveragedProjectionsWithActuals_weekly_wr,
+  aes(
+    x = points,
+    y = fantasyPoints)) + 
+  coord_cartesian(
+    xlim = c(0, plotRangeMax2),
+    ylim = c(plotRangeMin2, plotRangeMax2),
+    expand = FALSE) +
+  scale_x_continuous(breaks = seq(0, plotRangeMax2, by = 5)) +
+  scale_y_continuous(breaks = seq(0, plotRangeMax2, by = 5)) +
+  geom_line(
+    data = calibrationLoessPredictionInterval2,
+    aes(
+      x = x,
+      y = lower),
+    color = "red",
+    linetype = "dashed") + #Lower estimate of 95% prediction interval of linear model
+  geom_line(
+    data = calibrationLoessPredictionInterval2,
+    aes(
+      x = x,
+      y = upper),
+    color = "red",
+    linetype = "dashed") + #Upper estimate of 95% prediction interval of linear model
+  geom_smooth(
+    method = "gam",
+    color = viridisLite::viridis(3)[3],
+    fill = viridisLite::viridis(3)[1],
+    alpha = 0.7) + #95% confidence interval of GAM model
+  geom_abline(
+    slope = 1,
+    intercept = 0) +
+  labs(
+    x = "Projected Fantasy Points",
+    y = "Actual Fantasy Points",
+    title = "Calibration Plot for Weekly Projections of Wide Receivers"
+  ) +
+  theme_classic() + 
+  theme(axis.title.y = element_text(angle = 0, vjust = 0.5)) # horizontal y-axis title
+```
+
+Which show better calibration: the individual sources of projections or the crowd-averaged projections?
+Based on all of the available evidence, which would you say is more accurate (and why)?
+
+# Session Info
+
+```{r}
+sessionInfo()
+```

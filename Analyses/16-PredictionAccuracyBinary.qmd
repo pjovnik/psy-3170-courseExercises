@@ -155,8 +155,8 @@ Provide the accuracy for predicting whether or not the Running Back will get 150
 
 ```{r}
 petersenlab::accuracyAtCutoff(
-  predicted = player_stats_weekly_example$INSERT,
-  actual = player_stats_weekly_example$INSERT,
+  predicted = player_stats_weekly_example$INSERT, # predictor variable
+  actual = player_stats_weekly_example$INSERT, # outcome variable
   cutoff = INSERT
 )
 ```
@@ -165,8 +165,8 @@ Now, lower the cutoff to 50 rushing yards from their previous game:
 
 ```{r}
 petersenlab::accuracyAtCutoff(
-  predicted = player_stats_weekly_example$INSERT,
-  actual = player_stats_weekly_example$INSERT,
+  predicted = player_stats_weekly_example$INSERT, # predictor variable
+  actual = player_stats_weekly_example$INSERT, # outcome variable
   cutoff = INSERT
 )
 ```
@@ -182,8 +182,8 @@ Now, raise the cutoff to 150 rushing yards from their previous game:
 
 ```{r}
 petersenlab::accuracyAtCutoff(
-  predicted = player_stats_weekly_example$INSERT,
-  actual = player_stats_weekly_example$INSERT,
+  predicted = player_stats_weekly_example$INSERT, # predictor variable
+  actual = player_stats_weekly_example$INSERT, # outcome variable
   cutoff = INSERT
 )
 ```
@@ -201,8 +201,8 @@ Using a Running Back's rushing yards in a given game, find the accuracy at each 
 
 ```{r}
 petersenlab::accuracyAtEachCutoff(
-  predicted = player_stats_weekly_example$INSERT,
-  actual = player_stats_weekly_example$INSERT
+  predicted = player_stats_weekly_example$INSERT, # predictor variable
+  actual = player_stats_weekly_example$INSERT # outcome variable
 )
 ```
 
@@ -211,8 +211,8 @@ petersenlab::accuracyAtEachCutoff(
 ```{r}
 rocCurve <- pROC::roc(
   data = player_stats_weekly_example,
-  response = INSERT,
-  predictor = INSERT,
+  response = INSERT, # outcome variable
+  predictor = INSERT, # predictor variable
   smooth = FALSE)
 
 rocCurve$auc
