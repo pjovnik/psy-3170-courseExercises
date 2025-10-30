@@ -1,0 +1,290 @@
+---
+title: "20-Machine Learning"
+author: "Insert Your Name Here"
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+format:
+  html:
+    toc: true
+    toc-depth: 4
+    number-sections: true
+    number-depth: 4
+    code-fold: show
+    echo: true
+    error: true
+    embed-resources: true
+    self-contained-math: true
+---
+
+# Intro
+
+This is a [Quarto](https://quarto.org) file.
+Quarto enables you to weave together content and executable code into a finished document.
+When you execute code within the notebook, the results appear beneath the code. 
+This allows you to share your analyses and results with others so that they can see the results in line with the code for reproducibility.
+Make sure to have only one sentence per line.
+To learn more about Quarto see <https://quarto.org>.
+For course instructions on using Quarto, see here: <https://isaactpetersen.github.io/QuartoBlogFantasyFootball/posts/quarto-instructions/>.
+
+# Preamble
+
+## Install Libraries
+
+```{r}
+#install.packages("remotes")
+#remotes::install_github("DevPsyLab/petersenlab")
+#remotes::install_github("FantasyFootballAnalytics/ffanalytics")
+
+#update.packages(ask = FALSE)
+```
+
+## Load Libraries
+
+```{r}
+#| message: false
+#| warning: false
+
+library("petersenlab")
+library("future")
+library("missRanger")
+library("powerjoin")
+library("tidymodels")
+library("LongituRF")
+library("gpboost")
+library("effectsize")
+library("tidyverse")
+library("knitr")
+```
+
+## Specify Options
+
+```{r}
+options(scipen = 999) # prevent scientific notation
+```
+
+## Load Data
+
+Load the data file that is in the following location: `./Data/player_stats_weekly.Rdata` (if running locally) or `../Data/player_stats_weekly.Rdata` (if rendering).
+
+```{r}
+#| eval: false
+
+load(file = "./Data/player_stats_weekly.RData") # if running locally
+```
+
+```{r}
+load(file = "../Data/player_stats_weekly.RData") # if "rendering" (which uses the Analyses folder as the relative path)
+```
+
+## Prepare Data
+
+```{r}
+player_stats_weekly_example <- player_stats_weekly %>% 
+  filter(position == "WR") %>% 
+  arrange(player_id, season, week) %>% 
+  group_by(player_id, season) %>% 
+  mutate(fantasyPoints_nextGame = lead(fantasyPoints)) %>% # obtain a player's rushing yards from their prior game using the dplyr::lag() function
+  ungroup() %>% 
+  select(player_id, season, week, fantasyPoints, fantasyPoints_nextGame, ageCentered20, ageCentered20Quadratic, years_of_experience, receiving_yards, receiving_tds, receiving_air_yards, receiving_yards_after_catch, racr, targets, target_share) %>% 
+  na.omit() # drop rows with missing values (machine learning cannot handle missing values; an alternative approach if you don't want to drop rows with missing values would be to impute missing values)
+
+player_stats_weekly_example %>% 
+  select(player_id, season, week, fantasyPoints, fantasyPoints_nextGame) %>% 
+  head()
+
+model_predictions <- data.frame(
+  actual = player_stats_weekly_example$fantasyPoints_nextGame
+)
+```
+
+# Predicting WR Fantasy Points
+
+We will use a variety of techniques to predict WR fantasy points.
+
+## Linear Regression with One Predictor
+
+First, with the `player_stats_weekly_example` data file, let's use linear regression using the WR's fantasy points in a given game (`fantasyPoints`) to predict their fantasy points in the subsequent game (`fantasyPoints_nextGame`).
+
+```{r}
+linearRegression_onePredictor <- lm(
+  INSERT ~ INSERT,
+  data = INSERT,
+  na.action = "na.exclude"
+)
+
+summary(linearRegression_onePredictor)
+
+print(effectsize::standardize_parameters(linearRegression_onePredictor), digits = 2)
+
+model_predictions$linearRegression_onePredictor <- predict(linearRegression_onePredictor)
+
+# Evaluate Accuracy of Predictions
+petersenlab::accuracyOverall(
+  predicted = model_predictions$linearRegression_onePredictor,
+  actual = model_predictions$actual,
+  dropUndefined = TRUE
+)
+```
+
+What percent of the variance is explained by the model's predictions?
+
+## Linear Regression with Multiple Predictors
+
+Now, let's use linear regression with multiple predictors (`ageCentered20`, `ageCentered20Quadratic`, `years_of_experience`, `receiving_yards`, `receiving_tds`, `receiving_air_yards`, `receiving_yards_after_catch`, `racr`, `targets`, and `target_share`) to predict their fantasy points in the subsequent game (`fantasyPoints_nextGame`).
+
+```{r}
+linearRegression_multiplePredictors <- lm(
+  INSERT ~ fantasyPoints + ageCentered20 + ageCentered20Quadratic + years_of_experience + receiving_yards + receiving_tds + receiving_air_yards + receiving_yards_after_catch + racr + targets + target_share, # RACR = receiving_yards / receiving_air_yards
+  data = INSERT,
+  na.action = "na.exclude"
+)
+
+summary(linearRegression_multiplePredictors)
+
+print(effectsize::standardize_parameters(linearRegression_multiplePredictors), digits = 2)
+
+model_predictions$linearRegression_multiplePredictors <- predict(linearRegression_multiplePredictors)
+
+# Evaluate Accuracy of Predictions
+petersenlab::accuracyOverall(
+  predicted = model_predictions$linearRegression_multiplePredictors,
+  actual = model_predictions$actual,
+  dropUndefined = TRUE
+)
+```
+
+What percent of the variance is explained by the model's predictions?
+How much more variance is accounted for by the additional predictors (compared to the model with just fantasy points as a predictor)?
+
+## Machine Learning: Elastic Net Regression
+
+Now, we will use machine learning to predict WR fantasy points.
+Let's use elastic net regression using *k*-fold cross-validation to prevent overfitting.
+Let's use 10 folds.
+
+First, set up the folds:
+
+```{r}
+set.seed(52242) # for reproducibility
+
+folds_kFold <- rsample::group_vfold_cv(
+  player_stats_weekly_example,
+  group = player_id, # ensures all rows for a player are in the training set or all in the validation set for each fold
+  v = INSERT)
+```
+
+Now estimate the models:
+
+```{r}
+# Define Recipe (Formula)
+rec <- recipes::recipe(
+  fantasyPoints_nextGame ~ fantasyPoints_nextGame ~ fantasyPoints + ageCentered20 + ageCentered20Quadratic + years_of_experience + receiving_yards + receiving_tds + receiving_air_yards + receiving_yards_after_catch + racr + targets + target_share,
+  data = player_stats_weekly_example)
+
+# Define Model
+enet_spec <- 
+  parsnip::linear_reg(
+    penalty = tune::tune(),
+    mixture = tune::tune()) %>%
+  parsnip::set_engine("glmnet")
+
+# Workflow
+enet_wf <- workflows::workflow() %>%
+  workflows::add_recipe(rec) %>%
+  workflows::add_model(enet_spec)
+
+# Define a regular grid for both penalty and mixture
+grid_enet <- dials::grid_regular(
+  dials::penalty(range = c(-4, -1)),
+  dials::mixture(range = c(0, 1)),
+  levels = c(20, 5) # 20 penalty values × 5 mixture values
+)
+
+# Tune the Grid
+cv_results <- tune::tune_grid(
+  enet_wf,
+  resamples = folds_kFold,
+  grid = grid_enet,
+  metrics = yardstick::metric_set(rmse, mae, rsq),
+  control = tune::control_grid(save_pred = TRUE)
+)
+
+# View Cross-Validation metrics
+tune::collect_metrics(cv_results)
+
+# Identify best penalty and mixture parameters
+tune::select_best(cv_results, metric = "rmse")
+tune::select_best(cv_results, metric = "mae")
+tune::select_best(cv_results, metric = "rsq")
+
+best_penalty <- tune::select_best(cv_results, metric = "mae") # choose the best penalty and mixture parameters based on MAE
+
+# Finalize Workflow with Best Penalty
+final_wf <- tune::finalize_workflow(
+  enet_wf,
+  best_penalty)
+
+# Fit Final Model on Training Data
+final_model <- workflows::fit(
+  final_wf,
+  data = player_stats_weekly_example)
+
+# View Coefficients
+final_model %>% 
+  workflows::extract_fit_parsnip() %>% 
+  broom::tidy()
+
+model_predictions$elasticNet <- predict(
+  final_model,
+  new_data = player_stats_weekly_example)$.pred
+
+# Evaluate Accuracy of Predictions
+petersenlab::accuracyOverall(
+  predicted = model_predictions$elasticNet,
+  actual = model_predictions$actual,
+  dropUndefined = TRUE
+)
+```
+
+What percent variance did the machine learning model explain?
+Which model had the best discrimination in terms of $R^2$?
+Which model had the best calibration in terms of MAE and RMSE?
+
+Now, depict a calibration plot of the model's predicted vs actual values:
+
+```{r}
+# Calculate combined range for axes
+axis_limits <- range(c(model_predictions$elasticNet, model_predictions$actual), na.rm = TRUE)
+
+ggplot(
+  model_predictions,
+  aes(
+    x = elasticNet,
+    y = actual)) +
+  geom_point(
+    size = 2,
+    alpha = 0.6) +
+  geom_abline(
+    slope = 1,
+    intercept = 0,
+    color = "blue",
+    linetype = "dashed") +
+  coord_equal(
+    xlim = axis_limits,
+    ylim = axis_limits) +
+  labs(
+    title = "Predicted vs Actual Fantasy Points (Elastic Net Model)",
+    x = "Predicted Fantasy Points",
+    y = "Actual Fantasy Points"
+  ) +
+  theme_classic() +
+  theme(axis.title.y = element_text(angle = 0, vjust = 0.5)) # horizontal y-axis title
+```
+
+Would you say the machine learning model was accurate?
+Why or why not?
+
+# Session Info
+
+```{r}
+sessionInfo()
+```
