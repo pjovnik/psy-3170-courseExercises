@@ -1,0 +1,366 @@
+---
+title: "23-Cluster Analysis"
+author: "Insert Your Name Here"
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+format:
+  html:
+    toc: true
+    toc-depth: 4
+    number-sections: true
+    number-depth: 4
+    code-fold: show
+    echo: true
+    error: true
+    embed-resources: true
+    self-contained-math: true
+---
+
+# Intro
+
+This is a [Quarto](https://quarto.org) file.
+Quarto enables you to weave together content and executable code into a finished document.
+When you execute code within the notebook, the results appear beneath the code. 
+This allows you to share your analyses and results with others so that they can see the results in line with the code for reproducibility.
+Make sure to have only one sentence per line.
+To learn more about Quarto see <https://quarto.org>.
+For course instructions on using Quarto, see here: <https://isaactpetersen.github.io/QuartoBlogFantasyFootball/posts/quarto-instructions/>.
+
+# Preamble
+
+## Install Libraries
+
+```{r}
+#install.packages("remotes")
+#remotes::install_github("DevPsyLab/petersenlab")
+#remotes::install_github("FantasyFootballAnalytics/ffanalytics")
+
+#update.packages(ask = FALSE)
+```
+
+## Load Libraries
+
+```{r}
+#| message: false
+#| warning: false
+
+library("petersenlab")
+library("nflreadr")
+library("mclust")
+library("plotly")
+library("tidyverse")
+```
+
+## Specify Options
+
+```{r}
+
+```
+
+## Load Data
+
+Load the data file that is in the following location: `./Data/player_stats_weekly.Rdata` (if running locally) or `../Data/player_stats_weekly.Rdata` (if rendering).
+
+```{r}
+#| eval: false
+
+load(file = "./Data/player_stats_seasonal.RData") # if running locally
+load(file = "./Data/players_projections_seasonal.RData") # if running locally
+load(file = "./Data/nfl_playerIDs.RData") # if running locally
+```
+
+```{r}
+load(file = "../Data/player_stats_seasonal.RData") # if "rendering" (which uses the Analyses folder as the relative path)
+load(file = "../Data/players_projections_seasonal.RData") # if "rendering" (which uses the Analyses folder as the relative path)
+load(file = "../Data/nfl_playerIDs.RData") # if "rendering" (which uses the Analyses folder as the relative path)
+```
+
+## Prepare Data
+
+```{r}
+players_projections_seasonal <- players_projections_seasonal_average_merged %>% 
+  filter(avg_type == "average")
+
+players_projections_seasonal_rb <- players_projections_seasonal %>% 
+  filter(pos == "RB")
+```
+
+## Univariate Cluster Analysis: RB Player Tiers (Based on Projected Points)
+
+Perform a univariate cluster analysis to identify tiers of RBs based on projected points.
+Determine how many tiers provide an optimal tradeoff of fit and parsimony for the following criteria: BIC, ICL, and bootstrap.
+
+```{r}
+tiersRB_bic <- mclust::mclustBIC(
+  data = players_projections_seasonal_rb$points,
+  G = 1:9
+)
+
+tiersRB_bic
+summary(tiersRB_bic)
+plot(tiersRB_bic)
+
+tiersRB_icl <- mclust::mclustICL(
+  data = players_projections_seasonal_rb$points,
+  G = 1:9
+)
+
+tiersRB_icl
+summary(tiersRB_icl)
+plot(tiersRB_icl)
+
+tiersRB_bootstrap <- mclust::mclustBootstrapLRT(
+  data = players_projections_seasonal_rb$points,
+  modelName = "V") # variable/unequal variance (for univariate data)
+
+tiersRB_bootstrap
+
+plot(
+  tiersRB_bootstrap,
+  G = 3)
+
+plot(
+  tiersRB_bootstrap,
+  G = 4)
+```
+
+How many tiers are recommend based on BIC?
+How many tiers are recommend based on ICL?
+How many tiers are recommend based on bootstrapping?
+
+Now, set the number of tiers to the optimal number of tiers identified by bootstrapping.
+
+```{r}
+numTiersRB <- as.numeric(summary(tiersRB_bootstrap)[,"Length"][1]) # or could specify the number of teams manually
+```
+
+Now, fit a cluster model to this number of RB tiers.
+
+```{r}
+clusterModelRBs <- mclust::Mclust(
+  data = players_projections_seasonal_rb$points,
+  G = numTiersRB,
+)
+
+table(clusterModelRBs$classification)
+```
+
+How many players are in each tier?
+
+Create a plot of these tiers.
+
+```{r}
+players_projections_seasonal_rb$tier <- clusterModelRBs$classification
+
+players_projections_seasonal_rb <- players_projections_seasonal_rb %>%
+  mutate(
+    tier = factor(max(tier, na.rm = TRUE) + 1 - tier),
+    fullname = paste(first_name, last_name, sep = " ")
+  )
+
+players_projections_seasonal_rb$position_rank <- rank(
+  players_projections_seasonal_rb$points * -1,
+  na.last = "keep",
+  ties.method = "min")
+
+plot_rbTiers <- ggplot2::ggplot(
+  data = players_projections_seasonal_rb,
+  mapping = aes(
+    x = points,
+    y = position_rank,
+    color = tier
+  )) +
+  geom_point(
+    aes(
+      text = fullname # add player name for mouse over tooltip
+  )) +
+  scale_y_continuous(trans = "reverse") +
+  coord_cartesian(clip = "off") +
+  labs(
+    x = "Projected Points",
+    y = "Position Rank",
+    title = "Running Back Fantasy Points by Tier",
+    color = "Tier") +
+  theme_classic() +
+  theme(legend.position = "top")
+
+plotly::ggplotly(plot_rbTiers)
+```
+
+Tiers are intended to be helpful for aiding you in your draft to identify groups of players that are indistinguishable.
+It isn't very helpful, in a draft, if you have too many or too few players in a given tier.
+Looking at the plot, would you say there are too many tiers or too few tiers to be useful?
+That is, are there too many players or too few players in each tier?
+
+Modify your cluster model to be more useful by changing (i.e., manually specifying) the number of tiers.
+
+```{r}
+clusterModelRBs_new <- mclust::Mclust(
+  data = players_projections_seasonal_rb$points,
+  G = INSERT,
+)
+
+table(clusterModelRBs_new$classification)
+```
+
+How many players are in each tier?
+
+Create a plot of these tiers.
+
+```{r}
+players_projections_seasonal_rb$tier2 <- clusterModelRBs_new$classification
+
+players_projections_seasonal_rb <- players_projections_seasonal_rb %>%
+  mutate(
+    tier2 = factor(max(tier2, na.rm = TRUE) + 1 - tier2),
+    fullname = paste(first_name, last_name, sep = " ")
+  )
+
+plot_rbTiers2 <- ggplot2::ggplot(
+  data = players_projections_seasonal_rb,
+  mapping = aes(
+    x = points,
+    y = position_rank,
+    color = tier2
+  )) +
+  geom_point(
+    aes(
+      text = fullname # add player name for mouse over tooltip
+  )) +
+  scale_y_continuous(trans = "reverse") +
+  coord_cartesian(clip = "off") +
+  labs(
+    x = "Projected Points",
+    y = "Position Rank",
+    title = "Running Back Fantasy Points by Tier",
+    color = "Tier") +
+  theme_classic() +
+  theme(legend.position = "top")
+
+plotly::ggplotly(plot_rbTiers2)
+```
+
+## Multivariate Cluster Analysis: Types of WRs
+
+First, let's prepare the data for cluster analysis.
+We select the variables, average across seasons for a player, join with the player's name, and exclude missing values (which are not permissable by cluster analysis).
+
+```{r}
+player_stats_seasonal_wr_cluster <- player_stats_seasonal %>%
+  filter(position_group == "WR") %>% 
+  select(player_id, receptions, targets, receiving_yards, receiving_tds, receiving_air_yards, receiving_yards_after_catch, receiving_first_downs, receiving_epa, racr, target_share, air_yards_share, wopr) %>% 
+  group_by(player_id) %>% 
+  summarise(across(everything(), \(x) mean(x, na.rm = TRUE)))
+
+player_stats_seasonal_wr_cluster <- left_join(
+  player_stats_seasonal_wr_cluster,
+  nfl_playerIDs[,c("gsis_id","name")],
+  by = c("player_id" = "gsis_id")
+) %>% 
+  na.omit()
+```
+
+Next, perform a multivariate cluster analysis to determine how many clusters/types of WRs provide an optimal tradeoff between fit and parsimony.
+
+```{r}
+wrTypes_bic <- mclust::mclustBIC(
+  data = player_stats_seasonal_wr_cluster %>% select(-player_id, -name),
+  G = 1:9
+)
+
+wrTypes_bic
+summary(wrTypes_bic)
+plot(wrTypes_bic)
+
+wrTypes_icl <- mclust::mclustICL(
+  data = player_stats_seasonal_wr_cluster %>% select(-player_id, -name),
+  G = 1:9
+)
+
+wrTypes_icl
+summary(wrTypes_icl)
+plot(wrTypes_icl)
+
+#wrTypes_bootstrap <- mclust::mclustBootstrapLRT( # this takes a while to run
+#  data = player_stats_seasonal_wr_cluster %>% select(-player_id, -name),
+#  modelName = "VEV") # ellipsoidal with equal volume, variable shape, and equal orientation (for multivariate data)
+#
+#wrTypes_bootstrap
+#
+#plot(
+#  wrTypes_bootstrap,
+#  G = 3)
+#
+#plot(
+#  wrTypes_bootstrap,
+#  G = 4)
+```
+
+How many clusters of WRs would be selected based on BIC?
+How many clusters of WRs would be selected based on ICL?
+How many clusters of WRs would be selected based on bootstrapped likelihood ratio tests?
+
+Now, perform the multivariate cluster analysis with three clusters.
+
+```{r}
+clusterModelWRtypes <- mclust::Mclust(
+  data = player_stats_seasonal_wr_cluster %>% select(-player_id, -name),
+  G = 3,
+)
+
+summary(clusterModelWRtypes)
+
+plot(
+  clusterModelWRtypes,
+  what = "BIC")
+
+plot(
+  clusterModelWRtypes,
+  what = "classification")
+
+plot(
+  clusterModelWRtypes,
+  what = "uncertainty")
+
+plot(
+  clusterModelWRtypes,
+  what = "density")
+
+table(clusterModelWRtypes$classification)
+```
+
+How many players are in each cluster?
+
+Provide the average stats for each cluster.
+
+```{r}
+player_stats_seasonal_wr_cluster$type <- clusterModelWRtypes$classification
+
+player_stats_seasonal_wr_cluster %>% 
+  group_by(type) %>% 
+  summarise(across(
+    where(is.numeric),
+    ~ mean(., na.rm = TRUE)
+    )) %>% 
+  t() %>% 
+  round(., 2)
+```
+
+How would you characterize each cluster?
+
+Provide the names of the players in each cluster.
+
+```{r}
+player_stats_seasonal_wr_cluster %>% 
+  filter(type == 1) %>% 
+  select(name)
+
+player_stats_seasonal_wr_cluster %>% 
+  filter(type == 2) %>% 
+  select(name)
+```
+
+# Session Info
+
+```{r}
+sessionInfo()
+```
