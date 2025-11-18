@@ -1,0 +1,245 @@
+---
+title: "25-Data Reduction: Principal Component Analysis"
+author: "Insert Your Name Here"
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+format:
+  html:
+    toc: true
+    toc-depth: 4
+    number-sections: true
+    number-depth: 4
+    code-fold: show
+    echo: true
+    error: true
+    embed-resources: true
+    self-contained-math: true
+---
+
+# Intro
+
+This is a [Quarto](https://quarto.org) file.
+Quarto enables you to weave together content and executable code into a finished document.
+When you execute code within the notebook, the results appear beneath the code. 
+This allows you to share your analyses and results with others so that they can see the results in line with the code for reproducibility.
+Make sure to have only one sentence per line.
+To learn more about Quarto see <https://quarto.org>.
+For course instructions on using Quarto, see here: <https://isaactpetersen.github.io/QuartoBlogFantasyFootball/posts/quarto-instructions/>.
+
+# Preamble
+
+## Install Libraries
+
+```{r}
+#install.packages("remotes")
+#remotes::install_github("DevPsyLab/petersenlab")
+#remotes::install_github("FantasyFootballAnalytics/ffanalytics")
+
+#update.packages(ask = FALSE)
+```
+
+## Load Libraries
+
+```{r}
+#| message: false
+#| warning: false
+
+library("petersenlab")
+library("psych")
+library("nFactors")
+library("GGally")
+library("tidyverse")
+```
+
+## Specify Options
+
+```{r}
+
+```
+
+## Load Data
+
+Load the data file that is in the following location: `./Data/nfl_actualStats_team.RData` (if running locally) or `../Data/nfl_actualStats_team.RData` (if rendering).
+
+```{r}
+#| eval: false
+
+load(file = "./Data/nfl_actualStats_team.RData") # if running locally
+```
+
+```{r}
+load(file = "../Data/nfl_actualStats_team.RData") # if "rendering" (which uses the Analyses folder as the relative path)
+```
+
+## Prepare Data
+
+```{r}
+nfl_actualStats_team_seasonal_reg$fumbles_lost <- rowSums(nfl_actualStats_team_seasonal_reg[,c("sack_fumbles_lost","rushing_fumbles_lost","receiving_fumbles_lost")])
+
+pcaVars <- c(
+  "passing_yards","passing_tds","passing_interceptions","passing_epa","passing_cpoe",
+  "rushing_yards","rushing_tds","rushing_epa",
+  "receiving_epa","fumbles_lost"
+)
+
+dataForPCA <- nfl_actualStats_team_seasonal_reg
+
+# Standardize variables for PCA
+dataForPCA[pcaVars] <- scale(dataForPCA[pcaVars])
+```
+
+# Correlation Matrix
+
+```{r}
+petersenlab::cor.table(
+  nfl_actualStats_team_seasonal_reg[,pcaVars]
+)
+
+GGally::ggcorr(
+  nfl_actualStats_team_seasonal_reg[,pcaVars],
+  label = TRUE,
+  label_round = 2)
+```
+
+# Principal Component Analysis (PCA)
+
+## Determine Number of Components
+
+Determine the number of components to retain.
+
+### Scree Plots
+
+```{r}
+psych::fa.parallel(
+  x = dataForPCA[pcaVars],
+  fa = "pc"
+)
+
+screeDataEFA <- nFactors::nScree(
+  x = cor(
+    dataForPCA[pcaVars],
+    use = "pairwise.complete.obs"),
+  model = "components")
+
+nFactors::plotnScree(screeDataEFA)
+```
+
+### Very Simple Structure (VSS) Plot
+
+```{r}
+psych::vss(
+  dataForPCA[pcaVars],
+  rotate = "oblimin",
+  fm = "pc")
+
+psych::nfactors(
+  dataForPCA[pcaVars],
+  rotate = "oblimin",
+  fm = "pc")
+```
+
+## Fit Models
+
+```{r}
+pca1ComponentOblique <- psych::principal(
+  dataForPCA[pcaVars],
+  nfactors = 1,
+  rotate = "oblimin")
+
+pca2ComponentOblique <- psych::principal(
+  dataForPCA[pcaVars],
+  nfactors = 2,
+  rotate = "oblimin")
+
+pca3ComponentOblique <- psych::principal(
+  dataForPCA[pcaVars],
+  nfactors = 3,
+  rotate = "oblimin")
+
+pca4ComponentOblique <- psych::principal(
+  dataForPCA[pcaVars],
+  nfactors = 4,
+  rotate = "oblimin")
+
+pca5ComponentOblique <- psych::principal(
+  dataForPCA[pcaVars],
+  nfactors = 5,
+  rotate = "oblimin")
+
+pca6ComponentOblique <- psych::principal(
+  dataForPCA[pcaVars],
+  nfactors = 6,
+  rotate = "oblimin")
+
+pca7ComponentOblique <- psych::principal(
+  dataForPCA[pcaVars],
+  nfactors = 7,
+  rotate = "oblimin")
+
+pca8ComponentOblique <- psych::principal(
+  dataForPCA[pcaVars],
+  nfactors = 8,
+  rotate = "oblimin")
+
+pca9ComponentOblique <- psych::principal(
+  dataForPCA[pcaVars],
+  nfactors = 9,
+  rotate = "oblimin")
+
+pca1ComponentOblique
+pca2ComponentOblique
+pca3ComponentOblique
+pca4ComponentOblique
+pca5ComponentOblique
+pca6ComponentOblique
+pca7ComponentOblique
+pca8ComponentOblique
+pca9ComponentOblique
+```
+
+## Component Scores
+
+Here we extract the component scores from the one-component model:
+
+```{r}
+dataMergedWithPCA <- cbind(nfl_actualStats_team_seasonal_reg, pca1ComponentOblique$scores)
+```
+
+Component scores for the first six players:
+
+```{r}
+pca1ComponentOblique$scores %>% 
+  na.omit() %>% 
+  head()
+```
+
+## Identify the Best and Worst Offenses
+
+### Best Offenses
+
+Which teams (in a given season) have had the best offense?
+
+```{r}
+dataMergedWithPCA %>% 
+  arrange(-PC1) %>% 
+  select(season, team, PC1, all_of(pcaVars)) %>% 
+  na.omit() %>% 
+  head()
+```
+
+### Worst Offenses
+
+Which teams (in a given season) have had the worst offense?
+
+```{r}
+dataMergedWithPCA %>% 
+  arrange(PC1) %>% 
+  select(season, team, PC1, all_of(pcaVars)) %>% 
+  na.omit() %>% 
+  head()
+```
+
+# Session Info
+
+```{r}
+sessionInfo()
+```
