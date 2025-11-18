@@ -1,0 +1,331 @@
+---
+title: "24-Factor Analysis"
+author: "Insert Your Name Here"
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+format:
+  html:
+    toc: true
+    toc-depth: 4
+    number-sections: true
+    number-depth: 4
+    code-fold: show
+    echo: true
+    error: true
+    embed-resources: true
+    self-contained-math: true
+---
+
+# Intro
+
+This is a [Quarto](https://quarto.org) file.
+Quarto enables you to weave together content and executable code into a finished document.
+When you execute code within the notebook, the results appear beneath the code. 
+This allows you to share your analyses and results with others so that they can see the results in line with the code for reproducibility.
+Make sure to have only one sentence per line.
+To learn more about Quarto see <https://quarto.org>.
+For course instructions on using Quarto, see here: <https://isaactpetersen.github.io/QuartoBlogFantasyFootball/posts/quarto-instructions/>.
+
+# Preamble
+
+## Install Libraries
+
+```{r}
+#install.packages("remotes")
+#remotes::install_github("DevPsyLab/petersenlab")
+#remotes::install_github("FantasyFootballAnalytics/ffanalytics")
+
+#update.packages(ask = FALSE)
+```
+
+## Load Libraries
+
+```{r}
+#| message: false
+#| warning: false
+
+library("petersenlab")
+library("psych")
+library("nFactors")
+library("lavaan")
+library("lavaanPlot")
+library("lavaangui")
+library("GGally")
+library("GPArotation")
+library("tidyverse")
+```
+
+## Specify Options
+
+```{r}
+
+```
+
+## Load Data
+
+Load the data file that is in the following location: `./Data/nfl_actualStats_team.RData` (if running locally) or `../Data/nfl_actualStats_team.RData` (if rendering).
+
+```{r}
+#| eval: false
+
+load(file = "./Data/nfl_actualStats_team.RData") # if running locally
+```
+
+```{r}
+load(file = "../Data/nfl_actualStats_team.RData") # if "rendering" (which uses the Analyses folder as the relative path)
+```
+
+## Prepare Data
+
+```{r}
+nfl_actualStats_team_seasonal_reg$fumbles_lost <- rowSums(nfl_actualStats_team_seasonal_reg[,c("sack_fumbles_lost","rushing_fumbles_lost","receiving_fumbles_lost")])
+
+faVars <- c(
+  "passing_yards","passing_tds","passing_interceptions","passing_epa","passing_cpoe",
+  "rushing_yards","rushing_tds","rushing_epa",
+  "receiving_epa","fumbles_lost"
+)
+```
+
+# Correlation Matrix
+
+```{r}
+petersenlab::cor.table(
+  nfl_actualStats_team_seasonal_reg[,faVars]
+)
+
+GGally::ggcorr(
+  nfl_actualStats_team_seasonal_reg[,faVars],
+  label = TRUE,
+  label_round = 2)
+```
+
+# Exploratory Factor Analysis (EFA)
+
+## Determine Number of Factors
+
+Determine the number of factors to retain.
+
+### Scree Plots
+
+```{r}
+psych::fa.parallel(
+  x = nfl_actualStats_team_seasonal_reg[faVars],
+  fm = "ml",
+  fa = "fa"
+)
+
+screeDataEFA <- nFactors::nScree(
+  x = cor(
+    nfl_actualStats_team_seasonal_reg[faVars],
+    use = "pairwise.complete.obs"),
+  model = "factors")
+
+nFactors::plotnScree(screeDataEFA)
+```
+
+### Very Simple Structure (VSS) Plot
+
+```{r}
+psych::vss(
+  nfl_actualStats_team_seasonal_reg[faVars],
+  rotate = "oblimin",
+  fm = "mle")
+
+psych::nfactors(
+  nfl_actualStats_team_seasonal_reg[faVars],
+  rotate = "oblimin",
+  fm = "mle")
+```
+
+## Fit Models
+
+```{r}
+efa_fit <- lavaan::efa(
+  data = nfl_actualStats_team_seasonal_reg,
+  ov.names = faVars,
+  nfactors = 1:3,
+  rotation = "geomin",
+  missing = "ML",
+  estimator = "MLR",
+  bounds = "standard",
+  meanstructure = TRUE,
+  em.h1.iter.max = 2000000)
+
+summary(efa_fit)
+```
+
+## Plot Models
+
+```{r}
+lavaanPlot::lavaanPlot(
+  efa_fit$nf1,
+  coefs = TRUE,
+  #covs = TRUE,
+  stand = TRUE)
+
+lavaanPlot::lavaanPlot(
+  efa_fit$nf2,
+  coefs = TRUE,
+  #covs = TRUE,
+  stand = TRUE)
+
+lavaanPlot::lavaanPlot(
+  efa_fit$nf3,
+  coefs = TRUE,
+  #covs = TRUE,
+  stand = TRUE)
+```
+
+## Fit 1-Factor EFA Model
+
+To identify the best overall offense, let's retain one factor.
+If we kept more than one factor, we could distinguish between the best passing game, running game, etc.
+
+```{r}
+efa1factor_syntax <- '
+ # EFA Factor Loadings
+ efa("efa1")*f1 =~ passing_yards + passing_tds + passing_interceptions + passing_epa + passing_cpoe + 
+ rushing_yards + rushing_tds + rushing_epa + receiving_epa + fumbles_lost
+'
+
+efa1factor_fit <- sem(
+  efa1factor_syntax,
+  data = nfl_actualStats_team_seasonal_reg,
+  information = "observed",
+  missing = "ML",
+  estimator = "MLR",
+  rotation = "geomin",
+  bounds = "standard",
+  meanstructure = TRUE,
+  em.h1.iter.max = 2000000)
+
+summary(
+  efa1factor_fit,
+  fit.measures = TRUE,
+  standardized = TRUE,
+  rsquare = TRUE)
+```
+
+## Plot 1-Factor EFA Model
+
+```{r}
+lavaanPlot::lavaanPlot(
+  efa1factor_fit,
+  coefs = TRUE,
+  covs = TRUE,
+  stand = TRUE)
+```
+
+## Factor Scores
+
+```{r}
+efa1factor_factorScores <- lavaan::lavPredict(efa1factor_fit)
+
+nfl_actualStats_team_seasonal_reg <- cbind(nfl_actualStats_team_seasonal_reg, efa1factor_factorScores)
+```
+
+## Identify the Best and Worst Offenses
+
+### Best Offenses
+
+Which teams (in a given season) have had the best offense?
+
+```{r}
+nfl_actualStats_team_seasonal_reg %>% 
+  arrange(-f1) %>% 
+  select(season, team, f1, all_of(faVars)) %>% 
+  na.omit() %>% 
+  head()
+```
+
+### Worst Offenses
+
+Which teams (in a given season) have had the worst offense?
+
+```{r}
+nfl_actualStats_team_seasonal_reg %>% 
+  arrange(f1) %>% 
+  select(season, team, f1, all_of(faVars)) %>% 
+  na.omit() %>% 
+  head()
+```
+
+# Confirmatory Factor Analysis (CFA)
+
+## Fit Model
+
+To identify the best overall offense, let's retain one factor.
+If we kept more than one factor, we could distinguish between the best passing game, running game, etc.
+
+```{r}
+cfa1factor_syntax <- '
+ #Factor loadings
+ F1 =~ passing_yards + passing_tds + passing_interceptions + passing_epa + passing_cpoe + 
+ rushing_yards + rushing_tds + rushing_epa + receiving_epa + fumbles_lost
+'
+
+cfa1factor_fit <- lavaan::cfa(
+  cfa1factor_syntax,
+  data = nfl_actualStats_team_seasonal_reg,
+  missing = "ML",
+  estimator = "MLR",
+  bounds = "standard",
+  std.lv = TRUE,
+  em.h1.iter.max = 2000000)
+
+summary(
+  cfa1factor_fit,
+  fit.measures = TRUE,
+  standardized = TRUE,
+  rsquare = TRUE)
+```
+
+## Plot 1-Factor EFA Model
+
+```{r}
+lavaanPlot::lavaanPlot(
+  cfa1factor_fit,
+  coefs = TRUE,
+  covs = TRUE,
+  stand = TRUE)
+```
+
+## Factor Scores
+
+```{r}
+cfa1factor_factorScores <- lavaan::lavPredict(cfa1factor_fit)
+
+nfl_actualStats_team_seasonal_reg <- cbind(nfl_actualStats_team_seasonal_reg, cfa1factor_factorScores)
+```
+
+## Identify the Best and Worst Offenses
+
+### Best Offenses
+
+Which teams (in a given season) have had the best offense?
+
+```{r}
+nfl_actualStats_team_seasonal_reg %>% 
+  arrange(-F1) %>% 
+  select(season, team, F1, all_of(faVars)) %>% 
+  na.omit() %>% 
+  head()
+```
+
+### Worst Offenses
+
+Which teams (in a given season) have had the worst offense?
+
+```{r}
+nfl_actualStats_team_seasonal_reg %>% 
+  arrange(F1) %>% 
+  select(season, team, F1, all_of(faVars)) %>% 
+  na.omit() %>% 
+  head()
+```
+
+# Session Info
+
+```{r}
+sessionInfo()
+```
