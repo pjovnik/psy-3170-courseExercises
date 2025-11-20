@@ -1,0 +1,891 @@
+---
+title: "26-Simulation: Bootstrapping and the Monte Carlo Method"
+author: "Insert Your Name Here"
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+format:
+  html:
+    toc: true
+    toc-depth: 4
+    number-sections: true
+    number-depth: 4
+    code-fold: show
+    echo: true
+    error: true
+    embed-resources: true
+    self-contained-math: true
+---
+
+# Intro
+
+This is a [Quarto](https://quarto.org) file.
+Quarto enables you to weave together content and executable code into a finished document.
+When you execute code within the notebook, the results appear beneath the code. 
+This allows you to share your analyses and results with others so that they can see the results in line with the code for reproducibility.
+Make sure to have only one sentence per line.
+To learn more about Quarto see <https://quarto.org>.
+For course instructions on using Quarto, see here: <https://isaactpetersen.github.io/QuartoBlogFantasyFootball/posts/quarto-instructions/>.
+
+# Preamble
+
+## Install Libraries
+
+```{r}
+#install.packages("remotes")
+#remotes::install_github("DevPsyLab/petersenlab")
+#remotes::install_github("FantasyFootballAnalytics/ffanalytics")
+
+#update.packages(ask = FALSE)
+```
+
+## Load Libraries
+
+```{r}
+#| message: false
+#| warning: false
+
+library("SimDesign")
+library("tidyverse")
+library("lavaan")
+```
+
+# Simulation Examples
+
+A link to various simulation examples using the `SimDesign` package is here: <https://github.com/philchalmers/SimDesign/wiki#simulation-examples-with-simdesign>
+
+# Example 1: The Effect of Sample Size on the Standard Error
+
+What is the effect of sample size on the standard error?
+Demonstrate how the variability of the sample mean (its standard error) changes as the sample size increases.
+
+We can set up the simulation with the following code:
+
+```{r}
+num_replications <- 5000
+
+Design <- data.frame(
+  sample_size = c(5, 30, 60))
+
+Design
+
+Generate <- function(condition, fixed_objects = NULL){
+  dat <- rnorm(
+    n = condition$sample_size,
+    mean = 10,
+    sd = 2)
+  
+  dat
+}
+
+Analyse <- function(condition, dat, fixed_objects = NULL){
+  ret <- mean(dat)
+  
+  ret
+}
+
+Summarise <- function(condition, results, fixed_objects = NULL){
+  c_mean <- mean(results)
+  c_se <- sd(results)
+  
+  ret <- c(
+    mu = c_mean,
+    se = c_se) # create a named vector
+  
+  ret
+}
+```
+
+Now we can run the simulation with the code below:
+
+```{r}
+results <- SimDesign::runSimulation(
+  design = Design,
+  replications = num_replications,
+  generate = Generate,
+  analyse = Analyse,
+  summarise = Summarise,
+  seed = SimDesign::genSeeds(Design, iseed = 52242), # for reproducibility
+  parallel = TRUE # for faster (parallel) processing
+)
+```
+
+Now we can view the simulation results:
+
+```{r}
+results
+```
+
+Answer: the standard error decreases as the sample size increases.
+
+# Example 2: Determine Estimator Bias and Efficiency
+
+How does trimming affect recovering the mean of a distribution?
+Investigate this using different sample sizes with Gaussian and chi-squared distributions?
+Also, demonstrate the effect of using the median to recover the mean.
+Which estimate of the population mean is best under normality vs. skewed distributions?
+Compare different estimators of central tendency (mean, trimmed mean, median) in terms of bias, root mean squared error (RMSE), and relative efficiency (RE) with respect to the population mean.
+
+```{r}
+num_replications <- 1000
+
+Design <- expand.grid(
+  sample_size = c (30,60, 120),
+  distribution = c("norm", "chi"))
+
+# expand.grid() takes a set of named vectors and
+# constructs a data.frame where each row pertains
+# to a unique combination of the factor levels
+
+Generate <- function(condition, fixed_objects = NULL){
+  N <- with(condition, sample_size) # Alternatively, N <- condition$sample_size
+  
+  dist <- with(condition, distribution)
+  if (dist == "norm"){
+    dat <- rnorm(N, mean = 3)
+  } else if(dist == "chi"){
+    dat <- rchisq(N, df = 3)
+  }
+  
+  dat
+}
+
+Analyse <- function(condition, dat, fixed_objects = NULL){
+  M0 <- mean(dat)
+  M2 <- mean(dat, trim = .2) # mean() will do a 20% symmetric trim
+  med <- median(dat)
+  ret <- c(
+    mean_no_trim = M0,
+    mean_trim.2 = M2,
+    median = med)
+  
+  ret
+}
+
+Summarise <- function(condition, results, fixed_objects = NULL){
+  obs_bias <- bias(results, parameter = 3)
+  obs_RMSE <- RMSE(results, parameter = 3)
+  obs_RE <- RE(obs_RMSE)
+  
+  ret <- c(
+    bias = obs_bias,
+    RMSE = obs_RMSE,
+    RE = obs_RE)
+  
+  ret
+}
+```
+
+```{r}
+results <- SimDesign::runSimulation(
+  Design,
+  replications = num_replications,
+  generate = Generate,
+  analyse = Analyse,
+  summarise = Summarise,
+  seed = SimDesign::genSeeds(Design, iseed = 52242), # for reproducibility
+  parallel = TRUE # for faster (parallel) processing
+)
+```
+
+```{r}
+results
+```
+
+Answer (from Sigal & Chalmers, 2016): 
+Bias is negligible for data generated from a normal distribution, whether the untrimmed mean, 20% trimmed mean, or median is used as the measure of the population mean.
+However, this relationship does not hold for data generated from the chi-squared distribution—the population mean is recovered when using only the untrimmed mean.
+This is because the trimmed mean is being used to make inference about the population trimmed mean, and the median is making inferences about the population median, neither of which are symmetrically distributed or centered at the mean when the sample is drawn from a skewed distribution.
+Only when the distributions under investigation are symmetric will the statistics make suitable inferences about the population mean.
+
+Precision increases with sample size, which is indicated by the decreasing RMSE statistics; however, the chi-squared distribution estimates are higher overall than those from the normal data.
+Further, it appears trimming is slightly less efficient than using the untrimmed estimate, and using the median to estimate the mean is the least efficient method to recover the population mean.
+This can be seen by looking at the consistent pattern across the RMSE and RE values.
+
+# Example 3: Type I Error Rates and Power
+
+Study of Type I error and power rates for the independent groups t-test under violations of homogeneity of variance.
+How robust is the independent groups t-test to the violation of equal variances?
+How is it affected by discrepant sample sizes across groups?
+And, does the popular Welch correction (Welch, 1947) adequately deal with the issue of unequal variances?
+Which test (Welch vs. pooled t-test) maintains correct Type I error and/or has more power under heterogeneity?
+Investigate how violations of homogeneity of variance affect the performance of independent-samples *t*-tests (standard pooled-variance version vs. Welch's robust version).
+
+```{r}
+num_replications <- 1000
+
+Design <- expand.grid(
+  sample_size = c(30, 60, 120),
+  group_size_ratio = c(1, 2),
+  standard_deviation_ratio = c(1/4, 1, 4),
+  mean_difference = c(0, 0.5))
+
+Generate <- function(condition, fixed_objects = NULL){
+  # Attach() makes the variables in condition directly accesible
+  Attach (condition)
+  N1 <- sample_size / (group_size_ratio + 1 )
+  N2 <- sample_size - N1
+  group1 <- rnorm(N1)
+  group2 <- rnorm(N2, mean = mean_difference, sd = standard_deviation_ratio)
+  dat <- data.frame(
+    group = c(rep("g1", N1), rep("g2", N2)),
+    DV = c(group1, group2))
+  
+  dat
+}
+
+Analyse <- function(condition, dat, fixed_objects = NULL){
+  welch <- t.test (DV ~ group, dat)
+  ind <- t.test (DV ~ group, dat, var.equal = TRUE )
+  ret <- c(
+    welch = welch$p.value,
+    independent = ind$p.value)
+  
+  ret
+}
+
+Summarise <- function(condition, results, fixed_objects = NULL){
+  ret <- EDR(results, alpha = .05)
+  
+  ret
+}
+```
+
+```{r}
+results <- SimDesign::runSimulation(
+  design = Design,
+  replications = num_replications,
+  generate = Generate,
+  analyse = Analyse,
+  summarise = Summarise,
+  seed = SimDesign::genSeeds(Design, iseed = 52242), # for reproducibility
+  parallel = TRUE # for faster (parallel) processing
+)
+```
+
+```{r}
+results
+```
+
+```{r}
+TypeI <- subset(results, mean_difference == 0)
+Power <- subset(results, mean_difference != 0)
+print(TypeI, reps = FALSE, time = FALSE)
+
+ggplot(
+  TypeI,
+  aes(
+    x = factor(standard_deviation_ratio),
+    y = welch,
+    fill = factor(group_size_ratio))) +
+  geom_boxplot() + 
+  ylim(c(0, .2))
+
+ggplot(
+  TypeI,
+  aes(
+    x = factor(standard_deviation_ratio),
+    y = independent,
+    fill = factor(group_size_ratio))) +
+  geom_boxplot() + 
+  ylim(c(0, .2))
+```
+
+Answer (From Sigal & Chalmers, 2016): For EDRs based on the Welch correction, most of the EDRs hover around the nominal a value of 0.05.
+On the other hand, the independent *t*-test demonstrates widely discrepant behavior depending on the combination of simulation factors; hence, there is an interaction effect present between the simulation design factors.
+When the standard deviations were equal, the independent *t*-test appeared to perform well, which is not surprising because the assumption of homogeneity
+of variance was met.
+However, when the second group contained both a larger standard deviation and a larger sample size than the first group, the
+detection rates became more conservative.
+The converse was true when larger standard deviations were paired with smaller
+sample sizes compared to the first group; in that case, detection
+rates became progressively more liberal.
+Based on these simulation results, we could conclude that the Welch test performs well in all conditions studied, whereas the independent t-test
+only behaves well when groups sizes are equal or the standard
+deviations are equal in the population.
+
+# Example 4: Confidence Intervals and Coverage
+
+Which yields better coverage rates of confidence intervals (CIs) for the mean: *t*-based CIs or *z*-based CIs?
+Coverage pertains to how well a proposed CI captures the intended population parameter under repeated sampling conditions.
+This is similar to the previous example for obtaining detection rates.
+Although it is often claimed that CIs will contain the population parameter $(1 - \alpha) \times 100\%$ of the time under repeated sampling, this may not be true under all empirical conditions and should be evaluated using Monte Carlo simulations.
+Compare the empirical coverage rates of confidence intervals for the mean, using t-based CIs vs. z-based CIs.
+Do the *t* or *z* CIs truly capture the population mean $(1 - \alpha) \times 100\%$ of the time?
+Are these CIs influenced by sample size?
+How improper would the inferences be if *z* were used instead of *t*?
+
+```{r}
+num_replications <- 10000
+
+z.CI <- function(dat, alpha = .05){
+  xbar <- mean (dat)
+  SE <- sd (dat) / sqrt ( length (dat))
+  z <- abs ( qnorm (alpha / 2 ))
+  CI <- c (xbar - z * SE, xbar + z * SE)
+  
+  CI
+}
+
+Design <- expand.grid(
+  mu = c(0, 5, 10),
+  sample_size = c(10, 20, 30, 40, 50, 60, 70, 80))
+
+Generate <- function(condition, fixed_objects = NULL) {
+  dat <- with(condition, rnorm (sample_size, mu))
+  dat
+}
+
+Analyse <- function(condition, dat, fixed_objects = NULL){
+  t_test <- t.test(dat)
+  t_CI <- t_test$conf.int
+  z_CI <- z.CI(dat)
+  ret <- c(
+    t_CI = ECR(t_CI, parameter = condition$mu),
+    z_CI = ECR(z_CI, parameter = condition$mu))
+  
+  ret
+}
+
+Summarise <- function(condition, results, fixed_objects = NULL){
+  ret <- apply (results, 2 , mean)
+  ret
+}
+```
+
+```{r}
+results <- SimDesign::runSimulation(
+  Design,
+  replications = num_replications,
+  generate = Generate,
+  analyse = Analyse,
+  summarise = Summarise,
+  seed = SimDesign::genSeeds(Design, iseed = 52242), # for reproducibility
+  parallel = TRUE # for faster (parallel) processing
+)
+```
+
+```{r}
+results
+```
+
+Answer: *t*-based CIs provide better coverage rates than *z*-based CIs.
+*t*-based CIs provide good coverage rates at all sample sizes.
+However, when *z* is used, the CI is too liberal in the smaller sample sizes, meaning that it fails to contain the population mean as often as it should because the CIs are too narrow.
+*z*-based CIs do not provide good coverage until the sample size becomes greater than ~30.
+
+# Example 5: Mediation Analysis
+
+Evaluate the performance of the Sobel test for detecting mediation effects.
+How well does the Sobel test detect true mediation effects under different effect sizes and sample sizes?
+Investigate whether mediation models produce significant results (i.e., $p < .05$) when correctly and incorrectly specifying a linear three-variable system intended to reflect an underlying causal mediation structure.
+
+```{r}
+num_replications <- 1000
+
+# function returns data.frame of p-values, estimates, SEs, etc
+sobel_test <- function(X, M, Y){
+  M_X <- lm(M ~ X)
+  Y_XM <- lm(Y ~ X + M)
+  a <- coefficients(M_X)[2] # extract from numeric vector
+  b <- coefficients(Y_XM)[3]
+  stdera <- summary(M_X)$coefficients[2,2] # extract from list first then matrix
+  stderb <- summary(Y_XM)$coefficients[3,2]
+  sobelz <- a*b / sqrt(b^2 * stdera^2 + a^2 * stderb^2)
+  sobelp <- pnorm(abs(sobelz), lower.tail = FALSE)*2
+  ret <- data.frame(
+    a = a,
+    SE_a = stdera,
+    b = b,
+    SE_b = stdera,
+    z = sobelz,
+    p = sobelp)
+  
+  ret
+}
+
+# fully-crossed simulation experiment
+Design <- SimDesign::createDesign(
+  N = c(100, 300),
+  a = c(-.3, 0, .3),
+  b = c(-.3, 0, .3),
+  cp = c(-.2, 0, .2))
+
+Generate <- function(condition, fixed_objects = NULL){
+  Attach(condition) # make N, a, b, and cp accessable
+  X <- rnorm(N)
+  M <- a*X + rnorm(N)
+  Y <- cp*X + b*M + rnorm(N)
+  dat <- data.frame(
+    X = X,
+    M = M,
+    Y = Y)
+  
+  dat
+}
+
+Analyse <- function(condition, dat, fixed_objects = NULL){
+  Attach(dat) # make objects X, M, and Y directly accessible
+  sobel <- sobel_test(
+    X = X,
+    M = M,
+    Y = Y)$p
+  
+  sobel_incorrect <- sobel_test(
+    X = X,
+    M = Y,
+    Y = M)$p
+  
+  ret <- c(
+    sobel = sobel,
+    sobel_incorrect = sobel_incorrect)
+  
+  ret # named vector of p-values
+}
+
+Summarise <- function(condition, results, fixed_objects = NULL){
+  ret <- EDR(results, alpha = .05) # results object is a ’data.frame’
+  
+  ret # empirical detection rate returned
+}
+```
+
+NOTE: the following simulation code takes a long time to run!:
+
+```{r}
+results <- SimDesign::runSimulation(
+  Design,
+  replications = num_replications,
+  generate = Generate,
+  analyse = Analyse,
+  summarise = Summarise,
+  seed = SimDesign::genSeeds(Design, iseed = 52242), # for reproducibility
+  parallel = TRUE # for faster (parallel) processing
+)
+```
+
+```{r}
+results
+```
+
+# Example 5: Modified Mediation Analysis
+
+adds: an additional experimental factor to the simulation Design object; provides a conditional discrete-continuous data generation form for the `X` variable; and adds a bias-corrected bootstrap mediation *p*-value test in the `Analyse()` code block.
+Extend the mediation simulation by adding robust bootstrap inference and examining different distributions of the predictor variable `X`.
+Is the bootstrap test more accurate and robust than the Sobel test, especially when `X` is binary or effects are small?
+How much does distributional violation matter?
+
+```{r}
+num_replications <- 1000
+
+# function returns data.frame of p-values, estimates, SEs, etc
+boot_test <- function(X, M, Y, bootstrap = 5000){
+  dat <- data.frame(X=X, M=M, Y=Y)
+  syntax <- "
+    M ~ a * X
+    Y ~ b * M + cp * X
+    # indirect and total effects
+    ab := a * b
+    total := cp + ab"
+
+  mod <- lavaan:: sem(
+    syntax,
+    data = dat,
+    se = "bootstrap",
+    bootstrap 
+    = bootstrap)
+  # bias-corrected bootstrap
+  cfs <- lavaan::parameterEstimates(mod, boot.ci.type = "bca.simple")
+  ret <- cfs[cfs$label == "ab", ]
+  
+  ret
+}
+
+# fully-crossed simulation experiment
+Design <- SimDesign::createDesign(
+  N = c(100, 300),
+  a = c(-.3, 0, .3),
+  b = c(-.3, 0, .3),
+  cp = c(-.2, 0, .2),
+  dist = c("norm", "bern"))
+
+Generate <- function(condition, fixed_objects = NULL){
+  Attach(condition)
+  X <- if (dist == "norm") rnorm (N) else rbinom (N, size = 1, prob = .5)
+  M <- a*X + rnorm(N)
+  Y <- cp*X + b*M + rnorm(N)
+  dat <- data.frame(
+    X = X,
+    M = M,
+    Y = Y)
+  
+  dat
+}
+
+Analyse <- function(condition, dat, fixed_objects = NULL){
+  Attach(dat)
+  
+  sobel <- sobel_test(
+    X = X,
+    M = M,
+    Y = Y)$p
+  
+  sobel_incorrect <- sobel_test(
+    X=  X,
+    M = Y,
+    Y = M)$p
+  
+  boot <- boot_test(
+    X = X,
+    M = M,
+    Y = Y)$p
+  
+  boot_incorrect <- boot_test(
+    X = X,
+    M = Y,
+    Y = M)$p
+  
+  ret <- c(
+    sobel = sobel,
+    sobel_incorrect = sobel_incorrect,
+    boot = boot,
+    boot_incorrect = boot_incorrect)
+  
+  ret
+}
+
+Summarise <- function(condition, results, fixed_objects = NULL){
+  ret <- EDR(results, alpha = .05) # results object is a ’data.frame’
+  
+  ret # empirical detection rate returned
+}
+```
+
+NOTE: the following simulation code takes a long time to run!:
+
+```{r}
+results <- SimDesign::runSimulation(
+  Design,
+  replications = num_replications,
+  generate = Generate,
+  analyse = Analyse,
+  summarise = Summarise,
+  seed = SimDesign::genSeeds(Design, iseed = 52242), # for reproducibility
+  parallel = TRUE, # for faster (parallel) processing
+  filename = "modified_mediation",
+  save_results = TRUE
+)
+```
+
+```{r}
+results
+```
+
+# Example 6: Item Factor Analysis with Polychoric Correlations
+
+Evaluate the performance of different estimation methods (WLS, WLSMV) in confirmatory factor analysis (CFA) with ordinal data.
+Under what conditions do WLS vs. WLSMV provide accurate fit statistics, parameter estimates, and SEs?
+How do sample size, non-normality, and limited categories affect CFA estimation with ordinal data?
+
+From Chalmers and Adkins (2020):
+Determine the properties of an item factor analysis model for ordinal response data that utilizes polychoric correlation matrices.
+Evaluate two types of estimation criteria for empirical applications where the underlying latent variables are, or are not, distributed multivariate normal.
+The estimation criteria under investigation are the weighted least squares (WLS) and a robust variant of the WLS where only the diagonal of the associated weight matrix is used (termed diagonally weighted least squares; DWLS) with a mean-variance correction to the 2 goodness-of-1t statistic (termed WLSMV).
+Investigate the effects of various latent variable distribution shapes, the number of observed response categories, sample size, and model complexity (i.e., number of latent variables and observed indicator variables).
+The analysis of their simulated data will focus on the behavior of the (scaled) chi-squared goodness-of-fit test statistic, recovery of the population parameters, and the consistency of the standard error estimates.
+Finally, simulation results will be summarized using the relative bias meta-statistic, the distributional properties of the (scaled) chi-squared statistic relative to the model's degrees of freedom,
+and the performance of the standard error estimates relative to the standard deviation of the parameter estimates across the independent replications.
+
+```{r}
+num_replications <- 500
+
+genLavaanSyntax <- function(factors, indicators, analyse = FALSE){
+  ret <- if (factors == 1){
+    if (analyse){
+      paste0(paste0("f1 =~ NA*x1 + ", paste0(paste0("x", 2:indicators),
+                                             collapse = " + ")), "\nf1 ~~ 1*f1")
+      } else {
+        paste0(paste0("f1 =~ ", paste0(rep (.7, indicators),
+                                        paste0("*x", 1:indicators),
+                                        collapse = " + "), " \n"),
+               paste0(sprintf("x%s ~~ 0.51*x%s", 1:indicators, 1:indicators),
+                      collapse = " \n"))
+        }
+    } else if (factors == 2){
+      if (analyse){
+        paste0(paste0("f1 =~ NA*x1 + ",
+                       paste0( paste0("x", 2:indicators), collapse = " + ")),
+               paste0(sprintf("\nf2 =~ NA*x%s + ", indicators + 1),
+                      paste0(paste0("x", 2:indicators + indicators),
+                             collapse = " + ")),
+               "\nf1 ~~ 1*f1 \nf2 ~~ 1*f2 \nf1 ~~ f2")
+        } else {
+          paste0(paste0("f1 =~ ", paste0(rep (.7, indicators),
+                                         paste0("*x", 1:indicators),
+                                         collapse = " + "), " \n"),
+                 paste0("f2 =~ ", paste0(rep (.7, indicators),
+                                         paste0("*x", 1:indicators + indicators),
+                                         collapse = " + "), " \n"), "f1 ~~ .3*f2 \n",
+                 paste0(sprintf("x%s~~0.51*x%s", 1:indicators, 1:indicators),
+                        collapse = " \n"))
+          }
+      } else stop ("factors input is incorrect")
+  ret
+}
+
+Design <- SimDesign::createDesign(
+  N = c(100, 200, 500, 1000),
+  categories = c(2, 5),
+  skewness_kurtosis = list(c(0, 0), c(.75, 1.75), c(.75, 3.75), c(1.25, 1.75), c(1.25, 3.75)),
+  factors = c(1, 2),
+  indicators = c(5, 10),
+  estimator = c("WLSMV", "WLS"),
+  # remove known problematic conditions
+  subset = !(estimator == "WLS" & N %in% c(100, 200) & factors == 2 & indicators == 10))
+
+Generate <- function(condition, fixed_objects = NULL){
+  Attach(condition)
+  syntax <- genLavaanSyntax(factors = factors, indicators = indicators)
+  cdat <- simulateData(
+    syntax,
+    model.type = "cfa",
+    sample.nobs = N,
+    skewness = skewness_kurtosis[1L],
+    kurtosis = skewness_kurtosis[2L])
+  
+  tau <- if(categories == 5) c(-1.645, -0.643, 0.643, 1.645) else 0
+  
+  # data generation fix described in Flora’s (2002) unpublished dissertation
+  if (categories == 5 && all(skewness_kurtosis == c(1.25, 1.75)))
+    tau[1] <- -1.125
+  dat <- apply(cdat, 2, function(x, tau){
+    dat <- numeric(length(x))
+    for (i in 1:length(tau))
+      dat[x > tau[i]] <- i
+    dat
+    },
+    tau = tau)
+  
+  # throw error if number of categories not correct
+  if (!all( apply(dat, 2, function(x) length(unique(x))) == categories))
+    stop("Number of categories generated is incorrect")
+  
+  dat
+}
+
+Analyse <- function(condition, dat, fixed_objects = NULL) {
+  Attach(condition)
+  
+  syntax <- genLavaanSyntax(
+    factors = factors,
+    indicators = indicators,
+    analyse = TRUE)
+  
+  mod <- cfa(
+    syntax,
+    dat,
+    ordered = colnames(dat),
+    estimator = estimator)
+  
+  # check that model and coefficients are reasonable
+  if (!lavInspect(mod, "converged")) stop("Model did not converge")
+  pick_lambdas <- matrix(TRUE, indicators*factors, factors)
+  if(factors == 2)
+    pick_lambdas[(indicators+1):(indicators*3)] <- FALSE
+  cfs <- lavInspect(mod, what = "std")$lambda[pick_lambdas]
+  if(any(cfs > 1 | cfs < -1))
+    stop("Model contains Heywood cases")
+  if(factors > 2 && abs(lavInspect(mod, what = "std")$psi[2,1]) >= 1)
+    stop("Latent variable psi matrix not positive definite")
+  
+  # extract desired results
+  fit <- fitMeasures(mod)
+  ses <- lavInspect(mod, what = "se")$lambda[pick_lambdas]
+  stat_names <- extract_stats <- c("chisq", "df", "pvalue")
+  if(estimator == "WLSMV")
+    extract_stats <- paste0(extract_stats, ".scaled")
+  fitstats <- fit[extract_stats]
+  names (fitstats) <- stat_names
+  phi21 <- if(factors == 2)
+    lavInspect(mod, what = "std")$psi[1,2] else NULL
+  
+  ret <- c(
+    fitstats,
+    mean_ses = mean(ses),
+    lambda = cfs,
+    phi21 = phi21)
+  
+  ret
+}
+
+Summarise <- function(condition, results, fixed_objects = NULL){
+  # model parameters
+  lambdas <- results[ , grepl("lambda", colnames(results))]
+  pool_mean_lambdas <- mean(apply(lambdas, 2, mean)) # Equation 10 in F&C (2004)
+  pool_SD_lambdas <- sqrt(mean( apply(lambdas, 2, var))) # Equation 11 in F&C (2004)
+  RB_phi21 <- if(condition$factors == 2)
+    bias(
+      results$phi21,
+      parameter = .3,
+      type = "relative",
+      percent = TRUE) else NULL
+  mean_se <- mean(results$mean_ses)
+  
+  # goodness-of-fit
+  edr_05 <- EDR(results$pvalue, alpha = .05)
+  mean_X2 <- mean(results$chisq)
+  sd_X2 <- sd(results$chisq)
+  RB_X2 <- bias(
+    results$chisq,
+    parameter = results$df,
+    type = "relative",
+    percent = TRUE,
+    unname = TRUE)
+  
+  ret <- c(
+    mean_X2 = mean_X2,
+    sd_X2 = sd_X2,
+    edr_05 = edr_05,
+    pool_mean_lambdas = pool_mean_lambdas,
+    pool_SD_lambdas = pool_SD_lambdas,
+    mean_se = mean_se,
+    RB_X2 = RB_X2,
+    RB_phi21 = RB_phi21)
+  
+  ret
+}
+```
+
+Note: this takes a while to run.
+
+```{r}
+results <- SimDesign::runSimulation(
+  Design,
+  replications = num_replications,
+  generate = Generate,
+  analyse = Analyse,
+  summarise = Summarise,
+  max_errors = 100,
+  packages = "lavaan",
+  seed = SimDesign::genSeeds(Design, iseed = 52242), # for reproducibility
+  parallel = TRUE, # for faster (parallel) processing
+  filename = "FloraCurran2004",
+  save_results = TRUE
+)
+```
+
+```{r}
+results
+```
+
+Design conditions where the number of error messages raised was greater than 500:
+
+```{r}
+results %>% 
+  select(N:estimator, ERRORS) %>% 
+  filter(ERRORS > 500)
+```
+
+Marginal summary statistics for Flora and Curran's (2004) simulation experiment as implement in `SimDesign`.
+
+```{r}
+# marginalized detection rates given the estimator and sample size
+results %>% 
+  group_by(estimator, N) %>% 
+  summarise(EDR = mean(edr_05))
+
+# marginalized detection rates given the estimator, factors, and sample size
+results %>% 
+  group_by(estimator, factors, N) %>% 
+  summarise(EDR = mean(edr_05))
+```
+
+Code to replicate Table 5 in Flora and Curran (2004).
+
+```{r}
+# separate s and k values in skewness_kurtosis, create % variable
+# select only 5 categories, rename columns to match
+results_5 <- results %>% 
+  mutate(
+    s = sapply(results$skewness_kurtosis, function(x) x[1]), # could replace with purrr package: s = map_dbl(results$skewness_kurtosis, 1)
+    k = sapply(results$skewness_kurtosis, function(x) x[2]), # could replace with purrr package: k = map_dbl(results$skewness_kurtosis, 2)
+    "% reject" = edr_05 * 100) %>% 
+  filter(categories == 5) %>% 
+  rename(
+    M = "mean_X2",
+    SD = "sd_X2",
+    RB = "RB_X2"
+  )
+
+# construct Table 5 from information in Flora and Curran (2004)
+WLS <- results_5 %>% 
+  filter(indicators == 10, factors == 1, estimator == "WLS") %>% 
+  select(N, s, k, M, SD, RB, "% reject")
+
+WLSMV <- results_5 %>% 
+  filter(indicators == 10, factors == 1, estimator == "WLSMV") %>% 
+  select(N, s, k, RB, "% reject")
+
+tab5 <- full_join(
+  WLS,
+  WLSMV,
+  by = c("N", "s", "k"),
+  suffix = c("", ".DWLS")
+) %>% 
+  arrange(N, s, k)
+
+tab5
+```
+
+Code to replicate Figure 7 in Flora and Curran (2004).
+
+```{r}
+# generate summary data for Figure 6 in Flora and Curran (2004)
+fig6dat <- results_5 %>%
+  filter(indicators == 5) %>%
+  mutate(
+    TypeI = edr_05 * 100,
+    est_fact = factor(estimator):factor(factors)) %>%
+  group_by(N, est_fact) %>%
+  summarise(mean_TypeI = mean(TypeI))
+
+labels <- c(
+  "Model 1 (full WLS estimation)",
+  "Model 3 (full WLS estimation)",
+  "Model 1 (robust WLS estimation)",
+  "Model 3 (robust WLS estimation)")
+
+# draw graphic using the ggplot2 package
+ggplot(
+  fig6dat,
+  aes(
+    x = factor(N),
+    y = mean_TypeI,
+    linetype = est_fact,
+    shape = est_fact,
+    group = est_fact)) +
+  geom_line() +
+  geom_point(size = 4) +
+  geom_hline(
+    yintercept = 5,
+    colour = "red",
+    linetype = "dashed") +
+  xlab("Sample Size") + 
+  ylab("Type I Error Rate") +
+  scale_linetype_discrete(labels = labels) +
+  scale_shape_discrete(labels = labels) +
+  ylim(0, 80) + 
+  theme_bw() +
+  theme(
+    legend.title = element_blank(),
+    legend.position = c(.8, .7),
+    axis.line = element_line(colour = "black"),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.border = element_blank(),
+    panel.background = element_blank())
+```
+
+# Session Info
+
+```{r}
+sessionInfo()
+```
